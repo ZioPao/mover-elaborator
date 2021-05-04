@@ -1,19 +1,27 @@
+import time
+
 import serial
 from serial import SerialException
 import tkinter as tk
+from pynput.keyboard import KeyCode, Listener
 import matplotlib.pyplot as plt
 import re
 import array
 
+reset_mov = False
+listener = None
+
+id_master = 0
+id_slave = 0
+
 
 def init_movers():
+    global id_master, id_slave
 
     mov_tmp = None
     id_tmp = 0
     mov_master = None
-    id_master = 0
     mov_slave = None
-    id_slave = 0
 
     while (mov_master and mov_slave) is None:
 
@@ -23,9 +31,11 @@ def init_movers():
             decoded_bytes_tmp = ser_bytes_tmp.decode()
             if re.match('MASTER', decoded_bytes_tmp):
                 mov_master = mov_tmp
+                mov_master.write(b'c')
                 id_master = id_tmp
             if re.match('SLAVE', decoded_bytes_tmp):
                 mov_slave = mov_tmp
+                mov_slave.write(b'c')
                 id_slave = id_tmp
             id_tmp += 1     # just in case
         except SerialException:
@@ -38,7 +48,42 @@ def init_movers():
 
     return mov_master, mov_slave
 
-# GUI Part
+
+def reinit_movers():
+    global id_master, id_slave
+
+    m_mover = serial.Serial('COM' + str(id_master))
+    m_mover.flushInput()
+    m_mover.flushInput()
+
+    s_mover = serial.Serial('COM' + str(id_slave))
+    s_mover.flushInput()
+    s_mover.flushInput()
+
+    print("Resetted Master: -> COM" + str(id_master))
+
+    print("Resetted Slave -> COM" + str(id_slave))
+    return m_mover, s_mover
+
+
+
+# Keyboard shortcuts
+
+def start_listener():
+    global listener
+    if listener is None:
+        listener = Listener(on_press=on_press, on_relase=on_release)
+        listener.start()
+
+def on_press(key):
+    global reset_mov
+
+    if key.char == 'r':
+        reset_mov = True
+        return False
+
+def on_release(key):
+    pass
 
 '''
 window = tk.Tk()
@@ -48,9 +93,6 @@ window.mainloop()
 '''
 ########################################################################
 # Main
-
-master_id = 2      #has to be checked
-slave_id = 2
 
 main_mover, slave_mover = init_movers()
 
@@ -77,7 +119,23 @@ s_acc_z_values = list()
 s_gyr_x_values = list()
 s_gyr_y_values = list()
 s_gyr_z_values = list()
+
+
+start_listener()
+
+print("Start")
 while True:
+    if reset_mov:
+        print("Resetting!")
+        reset_mov = False
+        main_mover.write(b'r')
+        main_mover.close()
+
+        slave_mover.write(b'r')
+        slave_mover.close()
+
+        main_mover, slave_mover = reinit_movers()
+
     ser_bytes = main_mover.readline()
     decoded_bytes = ser_bytes.decode()
 
