@@ -7,6 +7,7 @@ from pynput.keyboard import KeyCode, Listener
 import matplotlib.pyplot as plt
 import re
 import array
+import pandas as pd
 
 reset_mov = False
 listener = None
@@ -68,8 +69,6 @@ def reinit_movers(m_mover, s_mover):
     print("Resetted Slave -> COM" + str(id_slave))
     return m_mover, s_mover
 
-
-
 # Keyboard shortcuts
 
 def start_listener():
@@ -127,7 +126,7 @@ s_gyr_z_values = list()
 
 
 start_listener()
-
+main_mover.reset_input_buffer()
 print("Start")
 while True:
     if reset_mov:
@@ -138,12 +137,14 @@ while True:
 
     ser_bytes = main_mover.readline()
     decoded_bytes = ser_bytes.decode()
+    print(decoded_bytes)
 
     # Read main data
     if re.match("main", decoded_bytes):
         ser_bytes = main_mover.readline()
         decoded_bytes = ser_bytes.decode()
         print(decoded_bytes)
+
         tmp = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes)[0]
         acc = array.array('i', [int(tmp[0]), int(tmp[1]), int(tmp[2])])
         gyr = array.array('i', [int(tmp[3]), int(tmp[4]), int(tmp[5])])
@@ -161,6 +162,8 @@ while True:
     if re.match("slave", decoded_bytes):
         ser_bytes = main_mover.readline()
         decoded_bytes = ser_bytes.decode()
+        print(decoded_bytes)
+
         tmp = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes)[0]
 
         # for plots
@@ -170,8 +173,12 @@ while True:
         s_gyr_x_values.append(int(tmp[3]))
         s_gyr_y_values.append(int(tmp[4]))
         s_gyr_z_values.append(int(tmp[5]))
-    else:
-        main_mover.reset_input_buffer()
 
+    #slave_bytes = slave_mover.readline()
+    #decoded_slave_bytes = slave_bytes.decode()
+    #print(decoded_slave_bytes)
+
+######################################################
 ax.scatter(m_gyr_x_values, m_gyr_y_values, m_gyr_z_values, c=m_gyr_z_values, cmap="Greens")
-ax.scatter(s_gyr_x_values, s_gyr_y_values, s_gyr_z_values, c=s_gyr_z_values, cmap="Greens")
+ax.scatter(s_gyr_x_values, s_gyr_y_values, s_gyr_z_values, c=s_gyr_z_values, cmap="Reds")
+
