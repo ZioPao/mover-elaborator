@@ -1,5 +1,5 @@
 import numpy as np
-
+import pandas as pd
 from sklearn import svm
 from sklearn.model_selection import ShuffleSplit, GridSearchCV
 from sklearn.preprocessing import MinMaxScaler
@@ -79,23 +79,38 @@ def run(x, y, splitter, scaler, clf):
 
 
 ######################################################################################
-x, y = load_mnist(n_samples=500)
-plt.figure(figsize=(8,8))
-plot_digits(x, y)
-plt.show()
+headers = ['user', 'activity', 'timestamp', 'x-accel', 'y-accel', 'z-accel']
+df = pd.read_csv('dataset.txt', names=headers)
 
-splitter = ShuffleSplit(n_splits=5, random_state=0, train_size=0.5)
-scaler = MinMaxScaler()
-clf = GridSearchCV(estimator=svm.SVC(kernel='linear'),
-                   param_grid={'C': [0.001, 0.01, 0.1, 1, 10, 100]})
+df_t = df.drop(columns=['user', 'timestamp'])
+X_train = df_t['x-accel'].array[:-10]
+y_train = df_t['y-accel'].array[:-10]
+z_train = df_t['z-accel'].array[:-10]
 
-acc = run(x, y, splitter, scaler, clf)
-print("Hyperparameter estimation (5-fold xval)")
-print("    - Best parameters set found on development set:", clf.best_params_)
-print("    - Grid scores on development set:")
-means = clf.cv_results_['mean_test_score']
-stds = clf.cv_results_['std_test_score']
-for mean, std, params in zip(means, stds, clf.cv_results_['params']):
-    print("        %0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
+X_test = df_t['x-accel'].array[-10:]
+y_test = df_t['y-accel'].array[-10:]
+z_test = df_t['z-accel'].array[-10:]
 
-print("Mean test accuracy: {:.1%} +/- {:.1%}\n".format(acc.mean(), 2*acc.std()))
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
+# scattering points
+iteration = 0
+for x, y, z in zip(x_values, y_values, z_values):
+    try:
+        print(iteration)
+        z = z[:-1]      # deletes ;
+        ax.scatter(float(x), float(y), float(z))
+        iteration += 1
+    except TypeError:
+        pass
+
+
+
+from sklearn.neighbors import KNeighborsClassifier
+knn = KNeighborsClassifier()
+knn.fit()
+
+
+
+
