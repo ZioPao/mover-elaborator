@@ -4,13 +4,16 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 from sklearn.neighbors import KNeighborsClassifier
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 from sklearn.cluster import KMeans
 
+import time
+
 headers = ['user', 'activity', 'timestamp', 'x-accel', 'y-accel', 'z-accel']
-df = pd.read_csv('dataset.txt', names=headers)
+df = pd.read_csv('WISDM_ar_v1.1_raw.txt', names=headers)
 
 df_t = df.drop(columns=['user', 'timestamp'])
 df_t = df_t.dropna()
@@ -22,23 +25,17 @@ df_t = df_t.dropna()
 
 # x_train
 
-# fixes z
 
-index = 0
-for index, row in df_t.iterrows():
-    try:
-        df_t.loc[index, 'z-accel'] = row.at['z-accel'][:-1]
-    except TypeError:
-        pass
-    index += 1
+# Corrected dataset from notepad++ removing ; on every line
+
+print("Setting up X")
+X = df_t[['x-accel', 'y-accel', 'z-accel']].to_numpy() # how do I use other values?
 
 
-X = df_t[['x-accel', 'y-accel', 'z-accel']]  # how do I use other values?
-X = X.dropna().to_numpy()
-
-# y_train setup
+print("Setting up y")
 y = df_t['activity'].array      # needs to be mapped to float values?
 
+print("Fixing the activity column")
 index = 0
 for var in y:
     if var == 'Jogging':
@@ -51,7 +48,9 @@ for var in y:
         y[index] = 3
     if var == "Standing":
         y[index] = 4
-
+    if var == "Sitting":
+        y[index] = 5
+    print(index)
     index += 1
 
 np.random.seed(0)
@@ -67,7 +66,36 @@ y_test = y[indices[-10:]]
 knn = KNeighborsClassifier()
 
 y_train = y_train.astype(float)
-knn.fit(X_train, y_train)
+
+
+# add our values to the list
+headers_mod = ['x-accel', 'y-accel', 'z-accel']
+stopped_movement = pd.DataFrame(list_to_predict, columns=headers_mod).to_numpy()
+indices = np.random.permutation(len(stopped_movement))
+
+stopped_movement = stopped_movement.astype('float16')
+stopped_movement = stopped_movement / 1000      #reduction to "normalize" using the original dataset as a reference
+
+stopped_movement = stopped_movement[indices[:-10]]
+y_mod = np.array([6] * len(stopped_movement))
+y_mod = y_mod[indices[:-10]]
+
+
+
+second_test_X = stopped_movement[indices[-10:]]
+second_test_y = y_mod[indices[-10:]]
+
+X_train_mod = np.concatenate((X_train, stopped_movement))
+y_train = np.append(y_train, y_mod)
+
+
+
+
+knn.fit(X_train_mod, y_train)
+
+pickle.dump(knn, open('model.bin', 'wb'))
+#loaded_model = pickle.load(open('model.bin', 'rb'))
+
 test = knn.predict(X_test)
 
 print("trained X_TEST")
@@ -76,11 +104,81 @@ print(X_test)
 print("trained y_TEST")
 print(y_test)
 
+# 4 rows x 2, 8 rows total per second
+
+
+test_mover = [[28, -24, 172], [96, 104, -84], [12, -88, -36], [112, 48, 52],
+              [12, -96, -92], [68, -36, -164], [8, -128, -108], [56, -64, -48],
+              [12, -40, -80], [40, -48, 76], [44, -104, -56], [120, -40, -44],
+              [-16, -76, -192], [0, -148, -28], [64, -216, 0], [68, -140, -12], [68, -108, -44],
+              [-40, -96, -108], [0, -132, -112], [-68, -140, -4], [-1448, 8904, -22020], [7528, -600, 12204],
+              [5064, -88, 12544], [-1864, -8020, -30784], [5736, -824, 16383], [3516, -4456, 4972], [-7468, -5092, -19828], [16896, 1396, 16383], [-6472, 13172, 15316], [-12820, 2704, -9644], [20040, 1344, 16383], [-1876, -4500, -18508], [-28676, 14668, 16383], [8476, 5376, 16383], [-544, -11256, 16384], [26016, 6040, 16383], [-32384, -19700, 21372], [-2580, 24632, 16383], [3688, -2024, 6628], [-15664, -7028, 11896], [5524, -7972, 16383], [-9008, -16180, -23768], [2868, -5380, 16383], [-3576, -12448, 22232], [1452, -4968, -84], [-1832, 5052, 3752], [-10548, -18332, 28264], [7452, 29168, 16383], [-2436, 18120, -6772], [2676, 9628, 9556], [408, 1660, -3412], [-7980, 6568, 16383], [-2044, 19148, 16383], [-25016, 10708, 16384], [-5060, -21124, 16383], [-9280, -4372, 16383], [-11216, 14940, 16384], [11844, 6012, 7920], [-7216, 6160, 16383], [-11760, 14220, 16384], [6560, 3856, 16383], [-176, 1736, 16383], [-712, 7924, 16384], [-8084, -32768, 16383], [-16328, -30040, 72], [2256, -2916, -3328], [6756, 11560, 8924], [-32768, 32308, 16384], [-3720, 4356, 16383], [-19856, -18664, 16384], [-2328, -14048, 16383], [-3208, 3520, 16383], [-4136, 16192, -30436], [9396, 11940, 16383], [-1740, 8892, -21280], [3436, 7432, 8000], [5148, 2772, 4176], [4464, 588, 2016], [1432, 1308, -4616], [-1744, -3512, -6716], [1084, -3388, 432], [6360, -4308, 16383], [1840, 408, -2352], [-1328, -324, -17016], [-1044, -612, -4276], [2756, -2980, 2080], [4428, -3800, 8576], [940, -1568, 740], [204, -3056, 392], [-440, -2692, -9604], [3604, -2572, -212], [2744, -1216, 2244], [344, -1076, 744],
+              [-400, -2272, -652], [708, 1452, -3592], [3184, 0, 3996], [1004, 1080, -4172], [-324, -264, -1572], [-1004, -1580, -5644], [2072, -2648, 2144]]
+
+test_mover_numpy = np.array(list_to_predict)
+test_mover_numpy = test_mover_numpy.astype('float16')
+test_mover_numpy = test_mover_numpy / 1000      #reduction to "normalize" using the original dataset as a reference
+
+
+time1 = time.time()
+test2 = knn.predict(test_mover_numpy)
+time2 = time.time()
+
+print(time2 - time1)
+
+should_be_standing = [[0.09600,-0.06400,0.02400]]
+sublist_x = list()
+sublist_y = list()
+sublist_z = list()
+for value in test_mover_numpy:
+    print(value)
+    sublist_x.append(value[0]/20)
+    sublist_y.append(value[1]/20)
+    sublist_z.append(value[2]/20)
+
+counter = range(0, len(sublist_x))
+ax_x = plt.axes()
+ax_x.scatter(counter, sublist_x, c='b' )
+
+ax_y = plt.axes()
+ax_y.scatter(counter, sublist_y, c='r')
+
+ax_z = plt.axes()
+ax_z.scatter(counter, sublist_z, c='g')
+plt.show()
+
+
+# type 6
+
+type_6 = 'Stopped'
+type_6_int = 6
 
 
 
 
-'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 estimators = [('k_means_mov_8', KMeans(n_clusters=8)),
@@ -151,4 +249,14 @@ stds = clf.cv_results_['std_test_score']
 for mean, std, params in zip(means, stds, clf.cv_results_['params']):
     print("        %0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
 
+
+
+
+for x in df_t.iterrows():
+    if x[0] == 0:
+        print(x)
+
 '''#print("Mean test accuracy: {:.1%} +/- {:.1%}\n".format(acc.mean(), 2*acc.std()))
+
+
+

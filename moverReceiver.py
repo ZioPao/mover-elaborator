@@ -7,7 +7,9 @@ from pynput.keyboard import KeyCode, Listener
 import matplotlib.pyplot as plt
 import re
 import array
+import numpy as np
 import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
 reset_mov = False
 listener = None
@@ -105,8 +107,7 @@ gyr_list = list()
 
 # plots stuff
 
-ax = plt.axes(projection='3d')
-# todo can be done with lambdas
+ax = plt.axes()
 
 # MAIN
 m_acc_x_values = list()
@@ -124,6 +125,9 @@ s_gyr_x_values = list()
 s_gyr_y_values = list()
 s_gyr_z_values = list()
 
+m_time_values = list()
+s_time_values = list()
+counter = 0
 
 start_listener()
 main_mover.reset_input_buffer()
@@ -152,10 +156,11 @@ while True:
         # for plots
         m_acc_x_values.append(int(tmp[0]))
         m_acc_y_values.append(int(tmp[1]))
+        m_time_values.append(counter)
         m_acc_z_values.append(int(tmp[2]))
-        m_gyr_x_values.append(int(tmp[3]))
-        m_gyr_y_values.append(int(tmp[4]))
-        m_gyr_z_values.append(int(tmp[5]))
+       # m_gyr_x_values.append(int(tmp[3]))
+       # m_gyr_y_values.append(int(tmp[4]))
+      #  m_gyr_z_values.append(int(tmp[5]))
 
         acc_list.append(acc)
         gyr_list.append(gyr)
@@ -169,16 +174,35 @@ while True:
         # for plots
         s_acc_x_values.append(int(tmp[0]))
         s_acc_y_values.append(int(tmp[1]))
-        s_acc_z_values.append(int(tmp[2]))
-        s_gyr_x_values.append(int(tmp[3]))
-        s_gyr_y_values.append(int(tmp[4]))
-        s_gyr_z_values.append(int(tmp[5]))
+        s_time_values.append(counter)
+        #s_acc_x_values.append(int(tmp[0]))
+        #s_acc_y_values.append(int(tmp[1]))
+        #s_acc_z_values.append(int(tmp[2]))
+        #s_gyr_x_values.append(int(tmp[3]))
+        #s_gyr_y_values.append(int(tmp[4]))
+       # s_gyr_z_values.append(int(tmp[5]))
 
     #slave_bytes = slave_mover.readline()
     #decoded_slave_bytes = slave_bytes.decode()
     #print(decoded_slave_bytes)
 
+    counter += 1
+
+
+
+np.array(_acc_x_values)
+normalization_x = np.linalg.norm(m_acc_x_values)
+normalized_x = m_acc_x_values/normalization_x
+
 ######################################################
 ax.scatter(m_gyr_x_values, m_gyr_y_values, m_gyr_z_values, c=m_gyr_z_values, cmap="Greens")
 ax.scatter(s_gyr_x_values, s_gyr_y_values, s_gyr_z_values, c=s_gyr_z_values, cmap="Reds")
 
+
+# need a way to let these two "datasets" collaborate 'cause they're pretty different data wise
+# if we divide the data by 20? should be enough to compare them
+
+
+list_to_predict = list()
+for i in range(0, len(m_acc_x_values)):
+   list_to_predict.append([m_acc_x_values[i], m_acc_y_values[i], m_acc_z_values[i]])
