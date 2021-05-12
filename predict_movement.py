@@ -12,6 +12,8 @@ from sklearn.cluster import KMeans
 
 import time
 
+# what if I "fixed" the current dataset with my values?
+
 headers = ['user', 'activity', 'timestamp', 'x-accel', 'y-accel', 'z-accel']
 df = pd.read_csv('WISDM_ar_v1.1_raw.txt', names=headers)
 
@@ -105,8 +107,6 @@ print("trained y_TEST")
 print(y_test)
 
 # 4 rows x 2, 8 rows total per second
-
-
 test_mover = [[28, -24, 172], [96, 104, -84], [12, -88, -36], [112, 48, 52],
               [12, -96, -92], [68, -36, -164], [8, -128, -108], [56, -64, -48],
               [12, -40, -80], [40, -48, 76], [44, -104, -56], [120, -40, -44],
@@ -257,6 +257,5 @@ for x in df_t.iterrows():
         print(x)
 
 '''#print("Mean test accuracy: {:.1%} +/- {:.1%}\n".format(acc.mean(), 2*acc.std()))
-
 
 

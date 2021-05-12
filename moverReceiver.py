@@ -1,25 +1,23 @@
 import time
-
 import serial
 from serial import SerialException
 import tkinter as tk
 from pynput.keyboard import KeyCode, Listener
-import matplotlib.pyplot as plt
+import pyxinput
 import re
-import array
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+import pickle
 
-reset_mov = False
-listener = None
+# IDs
+ID_MASTER = 0
+ID_SLAVE = 0
 
-id_master = 0
-id_slave = 0
+
+# Miscellaneous
+LISTENER = None
 
 
 def init_movers():
-    global id_master, id_slave
+    global ID_MASTER, ID_SLAVE
 
     mov_master = None
     mov_slave = None
@@ -30,15 +28,17 @@ def init_movers():
         try:
             mov_tmp = serial.Serial('COM' + str(id_tmp))
             ser_bytes_tmp = mov_tmp.readline()
-            decoded_bytes_tmp = ser_bytes_tmp.decode()
+            decoded_bytes_tmp = ser_bytes_tmp.decode()\
+
+            # todo rewrite this
             if re.match('MASTER', decoded_bytes_tmp):
                 mov_master = mov_tmp
                 mov_master.write(b'c')
-                id_master = id_tmp
+                ID_MASTER = id_tmp
             if re.match('SLAVE', decoded_bytes_tmp):
                 mov_slave = mov_tmp
                 mov_slave.write(b'c')
-                id_slave = id_tmp
+                ID_SLAVE = id_tmp
         except SerialException:
             pass
 
@@ -71,7 +71,27 @@ def reinit_movers(m_mover, s_mover):
     print("Resetted Slave -> COM" + str(id_slave))
     return m_mover, s_mover
 
+
+def read_decode_data(mover, search_string, acc_values_list):
+
+    ser_bytes = mover.readline()
+    decoded_bytes = ser_bytes.decode()
+
+    if re.match(search_string, decoded_bytes):
+        ser_bytes_data_line = mover.readline()
+        decoded_bytes_data_line = ser_bytes_data_line.decode()
+        regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line)[0]
+        acc_values_list.append([int(regex_search[0]), int(regex_search[1]), int(regex_search[2])])
+
+    return acc_values_list
+
+
+def predict_movement_type(model, X):
+    return model.predict(X)
+
+
 # Keyboard shortcuts
+
 
 def start_listener():
     global listener
@@ -99,39 +119,23 @@ window.mainloop()
 '''
 ########################################################################
 # Main
+########################################################################
+
 print("------------MOVER MANAGER------------\n")
 main_mover, slave_mover = init_movers()
-
-acc_list = list()
-gyr_list = list()
-
-# plots stuff
-
-ax = plt.axes()
-
-# MAIN
-m_acc_x_values = list()
-m_acc_y_values = list()
-m_acc_z_values = list()
-m_gyr_x_values = list()
-m_gyr_y_values = list()
-m_gyr_z_values = list()
-
-# SLAVE
-s_acc_x_values = list()
-s_acc_y_values = list()
-s_acc_z_values = list()
-s_gyr_x_values = list()
-s_gyr_y_values = list()
-s_gyr_z_values = list()
-
-m_time_values = list()
-s_time_values = list()
 counter = 0
+
+# Mover states
+reset_mov = False
 
 start_listener()
 main_mover.reset_input_buffer()
+
+# Loading prediction model
+knn = pickle.load(open('model.bin', 'rb'))
+
 print("Start")
+
 while True:
     if reset_mov:
         print("Resetting!")
@@ -139,55 +143,24 @@ while True:
         time.sleep(3)
         main_mover, slave_mover = reinit_movers(main_mover, slave_mover)
 
+    acc_values = list()     # reset
+
     ser_bytes = main_mover.readline()
     decoded_bytes = ser_bytes.decode()
     print(decoded_bytes)
 
-    # Read main data
-    if re.match("main", decoded_bytes):
-        ser_bytes = main_mover.readline()
-        decoded_bytes = ser_bytes.decode()
-        print(decoded_bytes)
+    # Read and store data to acc_values
+    acc_values = read_decode_data(main_mover, 'main', acc_values)
+    acc_values = read_decode_data(slave_mover, 'slave', acc_values)
 
-        tmp = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes)[0]
-        acc = array.array('i', [int(tmp[0]), int(tmp[1]), int(tmp[2])])
-        gyr = array.array('i', [int(tmp[3]), int(tmp[4]), int(tmp[5])])
+    prediction = predict_movement_type(knn, acc_values)
 
-        # for plots
-        m_acc_x_values.append(int(tmp[0]))
-        m_acc_y_values.append(int(tmp[1]))
-        m_time_values.append(counter)
-        m_acc_z_values.append(int(tmp[2]))
-       # m_gyr_x_values.append(int(tmp[3]))
-       # m_gyr_y_values.append(int(tmp[4]))
-      #  m_gyr_z_values.append(int(tmp[5]))
-
-        acc_list.append(acc)
-        gyr_list.append(gyr)
-    if re.match("slave", decoded_bytes):
-        ser_bytes = main_mover.readline()
-        decoded_bytes = ser_bytes.decode()
-        print(decoded_bytes)
-
-        tmp = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes)[0]
-
-        # for plots
-        s_acc_x_values.append(int(tmp[0]))
-        s_acc_y_values.append(int(tmp[1]))
-        s_time_values.append(counter)
-        #s_acc_x_values.append(int(tmp[0]))
-        #s_acc_y_values.append(int(tmp[1]))
-        #s_acc_z_values.append(int(tmp[2]))
-        #s_gyr_x_values.append(int(tmp[3]))
-        #s_gyr_y_values.append(int(tmp[4]))
-       # s_gyr_z_values.append(int(tmp[5]))
-
-    #slave_bytes = slave_mover.readline()
-    #decoded_slave_bytes = slave_bytes.decode()
-    #print(decoded_slave_bytes)
-
+    # Using values from the prediction, we guess what movement the user is doing
     counter += 1
 
+####################################################################################################
+# TEST STUFF
+####################################################################################################
 
 
 np.array(_acc_x_values)
