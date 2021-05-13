@@ -3,31 +3,12 @@ import serial
 from serial import SerialException
 import tkinter as tk
 from pynput.keyboard import KeyCode, Listener
-import pyxinput
 import re
 import pickle
 from collections import Counter
 
+from controller_module import Controller
 
-class Controller:
-
-    def __init__(self):
-        # Setup virtual controller
-        self.controller = pyxinput.vController()
-
-        # Setup various variables to store analog movement and stuff
-        self.analog_x = 0
-        self.analog_y = 0
-
-    def set_analog(self, first_pred, second_pred):
-
-        # we've got to chose one. Which ones wins and which one lose. Also,
-        # we have to store the values of the analog stick
-        self.controller.id = 0      # tmp
-        if first_pred != second_pred:
-            pass  # first pred wins
-        else:
-            pass  # does the movement of both of them obv
 
 
 # MAPPING
