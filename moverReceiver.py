@@ -11,10 +11,10 @@ import pickle
 # 0 = Jogging
 # 1 = Walking
 # 2 = Upstairs (Maybe reusable for jumping?)
-# 3 = Downstairs (Useless)
-# 4 = Standing (Useless)
-# 5 = Sitting (Useless)
 # 6 = Stopped
+# // = Downstairs (Useless)
+# // = Standing (Useless)
+# // = Sitting (Useless)
 
 # IDs
 ID_MASTER = 0
@@ -91,8 +91,7 @@ def read_decode_data(mover, search_string, acc_values_list):
         decoded_bytes_data_line = ser_bytes_data_line.decode()
         regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line)[0]
 
-        acc_values_list.append([6.,
-                                float(regex_search[0])/DATA_DIVIDER,
+        acc_values_list.append([float(regex_search[0])/DATA_DIVIDER,
                                 float(regex_search[1])/DATA_DIVIDER,
                                 float(regex_search[2])/DATA_DIVIDER])
 
