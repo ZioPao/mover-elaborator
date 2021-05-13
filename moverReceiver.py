@@ -3,9 +3,18 @@ import serial
 from serial import SerialException
 import tkinter as tk
 from pynput.keyboard import KeyCode, Listener
-import pyxinput
+#import pyxinput
 import re
 import pickle
+
+# MAPPING
+# 0 = Jogging
+# 1 = Walking
+# 2 = Upstairs (Maybe reusable for jumping?)
+# 3 = Downstairs (Useless)
+# 4 = Standing (Useless)
+# 5 = Sitting (Useless)
+# 6 = Stopped
 
 # IDs
 ID_MASTER = 0
@@ -14,7 +23,7 @@ ID_SLAVE = 0
 
 # Miscellaneous
 LISTENER = None
-
+DATA_DIVIDER = 1000
 
 def init_movers():
     global ID_MASTER, ID_SLAVE
@@ -47,9 +56,9 @@ def init_movers():
             break
 
     if mov_master and mov_slave:
-        print("Connected Master: -> COM" + str(id_master))
+        print("Connected Master: -> COM" + str(ID_MASTER))
         mov_master.flushInput()
-        print("Connected Slave -> COM" + str(id_slave))
+        print("Connected Slave -> COM" + str(ID_SLAVE))
         mov_slave.flushInput()
 
         return mov_master, mov_slave
@@ -81,7 +90,11 @@ def read_decode_data(mover, search_string, acc_values_list):
         ser_bytes_data_line = mover.readline()
         decoded_bytes_data_line = ser_bytes_data_line.decode()
         regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line)[0]
-        acc_values_list.append([int(regex_search[0]), int(regex_search[1]), int(regex_search[2])])
+
+        acc_values_list.append([6.,
+                                float(regex_search[0])/DATA_DIVIDER,
+                                float(regex_search[1])/DATA_DIVIDER,
+                                float(regex_search[2])/DATA_DIVIDER])
 
     return acc_values_list
 
@@ -94,10 +107,11 @@ def predict_movement_type(model, X):
 
 
 def start_listener():
-    global listener
-    if listener is None:
-        listener = Listener(on_press=on_press, on_relase=on_release)
-        listener.start()
+    global LISTENER
+
+    if LISTENER is None:
+        LISTENER = Listener(on_press=on_press, on_relase=on_release)
+        LISTENER.start()
 
 
 def on_press(key):
@@ -132,10 +146,10 @@ start_listener()
 main_mover.reset_input_buffer()
 
 # Loading prediction model
-knn = pickle.load(open('model.bin', 'rb'))
+knn = pickle.load(open('model2.bin', 'rb'))
 
 print("Start")
-
+new_X = list()
 while True:
     if reset_mov:
         print("Resetting!")
@@ -145,15 +159,19 @@ while True:
 
     acc_values = list()     # reset
 
-    ser_bytes = main_mover.readline()
-    decoded_bytes = ser_bytes.decode()
-    print(decoded_bytes)
-
     # Read and store data to acc_values
     acc_values = read_decode_data(main_mover, 'main', acc_values)
-    acc_values = read_decode_data(slave_mover, 'slave', acc_values)
+    if len(acc_values) != 0:
+        new_X += acc_values
+    #acc_values = read_decode_data(slave_mover, 'slave', acc_values)
 
-    prediction = predict_movement_type(knn, acc_values)
+    try:
+        prediction = predict_movement_type(knn, acc_values)
+        print(prediction)
+        print(acc_values)
+        print('--------------------')
+    except ValueError:
+        pass
 
     # Using values from the prediction, we guess what movement the user is doing
     counter += 1

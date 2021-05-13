@@ -14,11 +14,16 @@ import time
 
 # what if I "fixed" the current dataset with my values?
 
-headers = ['user', 'activity', 'timestamp', 'x-accel', 'y-accel', 'z-accel']
-df = pd.read_csv('WISDM_ar_v1.1_raw.txt', names=headers)
+headers = ['activity', 'x-accel', 'y-accel', 'z-accel']
+df_t = pd.read_csv('new_dataset.csv', names=headers, low_memory=False)
 
-df_t = df.drop(columns=['user', 'timestamp'])
-df_t = df_t.dropna()
+#df_new_X = pd.DataFrame(new_X, columns=['activity', 'x-accel', 'y-accel', 'z-accel'])
+#new_df = pd.concat([df_t, df_new_X])
+#new_df.to_csv('new_dataset.csv')
+
+
+
+
 
 # x -> data
 # y -> eval
@@ -37,23 +42,6 @@ X = df_t[['x-accel', 'y-accel', 'z-accel']].to_numpy() # how do I use other valu
 print("Setting up y")
 y = df_t['activity'].array      # needs to be mapped to float values?
 
-print("Fixing the activity column")
-index = 0
-for var in y:
-    if var == 'Jogging':
-        y[index] = 0
-    if var == 'Walking':
-        y[index] = 1
-    if var == 'Upstairs':
-        y[index] = 2
-    if var == 'Downstairs':
-        y[index] = 3
-    if var == "Standing":
-        y[index] = 4
-    if var == "Sitting":
-        y[index] = 5
-    print(index)
-    index += 1
 
 np.random.seed(0)
 indices = np.random.permutation(len(X))
@@ -126,7 +114,6 @@ time2 = time.time()
 
 print(time2 - time1)
 
-should_be_standing = [[0.09600,-0.06400,0.02400]]
 sublist_x = list()
 sublist_y = list()
 sublist_z = list()
