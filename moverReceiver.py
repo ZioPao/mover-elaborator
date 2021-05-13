@@ -3,7 +3,7 @@ import serial
 from serial import SerialException
 import tkinter as tk
 from pynput.keyboard import KeyCode, Listener
-#import pyxinput
+import pyxinput
 import re
 import pickle
 
@@ -24,6 +24,7 @@ ID_SLAVE = 0
 # Miscellaneous
 LISTENER = None
 DATA_DIVIDER = 1000
+
 
 def init_movers():
     global ID_MASTER, ID_SLAVE
@@ -86,7 +87,11 @@ def read_decode_data(mover, search_string, acc_values_list):
     ser_bytes = mover.readline()
     decoded_bytes = ser_bytes.decode()
 
-    if re.match(search_string, decoded_bytes):
+    while re.match(search_string, decoded_bytes) is None:
+        print("Waiting for data")
+        ser_bytes = mover.readline()
+        decoded_bytes = ser_bytes.decode()
+    else:
         ser_bytes_data_line = mover.readline()
         decoded_bytes_data_line = ser_bytes_data_line.decode()
         regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line)[0]
@@ -144,6 +149,10 @@ reset_mov = False
 start_listener()
 main_mover.reset_input_buffer()
 
+# Setup virtual controller
+controller = pyxinput.vController()
+
+
 # Loading prediction model
 knn = pickle.load(open('model2.bin', 'rb'))
 
@@ -158,12 +167,13 @@ while True:
 
     acc_values = list()     # reset
 
-    # Read and store data to acc_values
     acc_values = read_decode_data(main_mover, 'main', acc_values)
-    if len(acc_values) != 0:
-        new_X += acc_values
-    #acc_values = read_decode_data(slave_mover, 'slave', acc_values)
+    acc_values = read_decode_data(main_mover, 'slave', acc_values)
 
+    # Read and store data to acc_values
+    #if len(acc_values) != 0:
+    #    new_X += acc_values
+    #acc_values = read_decode_data(slave_mover, 'slave', acc_values)
     try:
         prediction = predict_movement_type(knn, acc_values)
         print(prediction)
