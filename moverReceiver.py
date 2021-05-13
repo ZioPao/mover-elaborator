@@ -6,6 +6,29 @@ from pynput.keyboard import KeyCode, Listener
 import pyxinput
 import re
 import pickle
+from collections import Counter
+
+
+class Controller:
+
+    def __init__(self):
+        # Setup virtual controller
+        self.controller = pyxinput.vController()
+
+        # Setup various variables to store analog movement and stuff
+        self.analog_x = 0
+        self.analog_y = 0
+
+    def set_analog(self, first_pred, second_pred):
+
+        # we've got to chose one. Which ones wins and which one lose. Also,
+        # we have to store the values of the analog stick
+        self.controller.id = 0      # tmp
+        if first_pred != second_pred:
+            pass  # first pred wins
+        else:
+            pass  # does the movement of both of them obv
+
 
 # MAPPING
 # 0 = Jogging
@@ -24,6 +47,7 @@ ID_SLAVE = 0
 # Miscellaneous
 LISTENER = None
 DATA_DIVIDER = 1000
+MAX_LEN_PREDICTION_LIST = 4
 
 
 def init_movers():
@@ -103,10 +127,6 @@ def read_decode_data(mover, search_string, acc_values_list):
     return acc_values_list
 
 
-def predict_movement_type(model, X):
-    return model.predict(X)
-
-
 # Keyboard shortcuts
 
 
@@ -142,22 +162,24 @@ window.mainloop()
 print("------------MOVER MANAGER------------\n")
 main_mover, slave_mover = init_movers()
 counter = 0
+start_listener()
 
 # Mover states
 reset_mov = False
 
-start_listener()
-main_mover.reset_input_buffer()
+# Set the controller
+controller = Controller()
 
-# Setup virtual controller
-controller = pyxinput.vController()
-
+# Saves predicted movement from 3-4 loops to guess what movement is actually going. The most of the value wins
+main_prediction_list = list()
+slave_prediction_list = list()
 
 # Loading prediction model
 knn = pickle.load(open('model2.bin', 'rb'))
 
 print("Start")
-new_X = list()
+main_mover.reset_input_buffer()
+
 while True:
     if reset_mov:
         print("Resetting!")
@@ -165,17 +187,29 @@ while True:
         time.sleep(3)
         main_mover, slave_mover = reinit_movers(main_mover, slave_mover)
 
-    acc_values = list()     # reset
+    # Resetting list with current values of movement
+    acc_values = list()
+
+    if len(main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
+
+        # Guess movement
+        main_prediction = Counter(main_prediction_list).most_common(1)[0][0]
+        slave_prediction = Counter(slave_prediction_list).most_common(1)[0][0]
+
+        # Resets lists
+        main_prediction_list = list()
+        slave_prediction_list = list()
 
     acc_values = read_decode_data(main_mover, 'main', acc_values)
     acc_values = read_decode_data(main_mover, 'slave', acc_values)
 
-    # Read and store data to acc_values
-    #if len(acc_values) != 0:
-    #    new_X += acc_values
-    #acc_values = read_decode_data(slave_mover, 'slave', acc_values)
     try:
-        prediction = predict_movement_type(knn, acc_values)
+        # Predict type of movement
+        prediction = knn.predict(acc_values)
+
+        main_prediction_list.append(prediction[0])
+        slave_prediction_list.append(prediction[1])
+
         print(prediction)
         print(acc_values)
         print('--------------------')
@@ -184,6 +218,19 @@ while True:
 
     # Using values from the prediction, we guess what movement the user is doing
     counter += 1
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ####################################################################################################
 # TEST STUFF
