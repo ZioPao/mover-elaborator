@@ -1,5 +1,9 @@
 import pyxinput
 
+#####################
+DEBUG = 1
+#####################
+
 LEFT_AXIS_X = 'AxisLx'
 LEFT_AXIS_Y = 'AxisLy'
 
@@ -10,9 +14,16 @@ CURR_ANALOG_KEY = 'current'
 # 1 = Walking
 # 2 = Upstairs (Maybe reusable for jumping?)
 # 6 = Stopped
-JOGGING_INCREMENT = 10
-WALKING_INCREMENT = 2
-STOPPED_INCREMENT = 0
+JOGGING_INCREMENT = 0.1
+JOGGING_TOP = 1
+WALKING_INCREMENT = 0.05
+WALKING_TOP = 0.2
+
+STOPPED_DECREMENT = 0.15
+STOPPED_MIN = 0.05
+
+
+STOPPED_RANGE = 0.1
 #UPSTAIRS_INCREMENT = ..
 
 
@@ -21,42 +32,26 @@ class Controller:
     def __init__(self):
         # Setup virtual controller
         self.controller = pyxinput.vController()
-        self.data_reading = pyxinput.rController(1)     # we cannot read back the analog stick values normally
+        #self.data_reading = pyxinput.rController(1)     # we cannot read back the analog stick values normally
 
-        self.analog_values = {'old': [], 'current': []}
+        self.analog_values = {'old': [0, 0], 'current': [0, 0]}
         self.prev_prediction = None
 
-    def choose_prediction(self, prediction):
-        # todo better if ints and not floats
+    def get_new_analog_values(self, increment, top_value):
+        if self.analog_values[OLD_ANALOG_KEY][1] < top_value:
+            #self.analog_values[OLD_ANALOG_KEY][0] < top_value and \
 
 
-        new_x_value = 0
-        new_y_value = 0
+            #new_x_value = self.analog_values[OLD_ANALOG_KEY][0] + increment
+            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + increment
+        else:
+            #new_x_value = self.analog_values[OLD_ANALOG_KEY][0]
+            new_y_value = top_value
 
-        if prediction == 0.:
+        new_x_value = 0     # delete me
+        return new_x_value, new_y_value
 
-            # jogging
-            new_x_value = self.analog_values[OLD_ANALOG_KEY][0] + JOGGING_INCREMENT
-            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + JOGGING_INCREMENT
-
-        if prediction == 1.:
-            # walking
-            new_x_value = self.analog_values[OLD_ANALOG_KEY][0] + WALKING_INCREMENT
-            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + WALKING_INCREMENT
-        if prediction == 2.:
-            # upstairs
-            pass
-        if prediction == 6.:        # todo change it to 3
-            new_x_value = self.analog_values[OLD_ANALOG_KEY][0] + STOPPED_INCREMENT
-            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + STOPPED_INCREMENT
-
-        self.controller.set_value(LEFT_AXIS_X, new_x_value)
-        self.controller.set_value(LEFT_AXIS_Y, new_y_value)
-        # back them up
-        self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
-        self.analog_values[CURR_ANALOG_KEY] = [new_x_value, new_y_value]
-
-    def set_analog(self, preds, mov_list):
+    def set_analog(self, preds):
 
         # todo how do we use Z? as a multiplier?
         first_prediction = preds[0]
@@ -71,4 +66,42 @@ class Controller:
         else:
             self.choose_prediction(first_prediction)
 
+    def choose_prediction(self, prediction):
+        # todo better if ints and not floats
 
+        # todo fix this, just for test
+        new_x_value = 0
+        new_y_value = 0
+
+        if prediction == 0.:
+            # jogging
+            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_TOP)
+        if prediction == 1.:
+            # walking
+            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_TOP)
+        if prediction == 2.:
+            # upstairs
+            pass
+        if prediction == 6.:        # todo change it to 3
+            # stopped
+            if STOPPED_RANGE > self.analog_values[OLD_ANALOG_KEY][1] > -STOPPED_RANGE: #and \
+                    #STOPPED_RANGE > self.analog_values[OLD_ANALOG_KEY][0] > -STOPPED_RANGE:
+                new_x_value = 0
+                new_y_value = 0
+            else:
+                #new_x_value = self.analog_values[OLD_ANALOG_KEY][0] - STOPPED_DECREMENT
+                new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - STOPPED_DECREMENT
+
+        if DEBUG:
+            print("Pred -> " + str(prediction))
+            #print("Old X ->" + str(self.analog_values[OLD_ANALOG_KEY][0]))
+            print("Old Y -> " + str(self.analog_values[OLD_ANALOG_KEY][1]))
+            #print("New X ->" + str(new_x_value))
+            print("New Y -> " + str(new_y_value))
+            print("___________________________")
+
+        #self.controller.set_value(LEFT_AXIS_X, new_x_value)
+        self.controller.set_value(LEFT_AXIS_Y, new_y_value)
+        # back them up
+        self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
+        self.analog_values[CURR_ANALOG_KEY] = [new_x_value, new_y_value]

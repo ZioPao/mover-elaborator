@@ -74,7 +74,7 @@ def init_movers():
 
 
 def reinit_movers(m_mover, s_mover):
-    global id_master, id_slave
+    global ID_MASTER, ID_SLAVE
 
     m_mover.write(b'r')
     s_mover.write(b'r')
@@ -82,8 +82,8 @@ def reinit_movers(m_mover, s_mover):
     time.sleep(5)
     m_mover.write(b'c')
     s_mover.write(b'c')
-    print("Resetted Master -> COM" + str(id_master))
-    print("Resetted Slave -> COM" + str(id_slave))
+    print("Resetted Master -> COM" + str(ID_MASTER))
+    print("Resetted Slave -> COM" + str(ID_SLAVE))
     return m_mover, s_mover
 
 
@@ -161,44 +161,49 @@ knn = pickle.load(open('model2.bin', 'rb'))
 print("Start")
 main_mover.reset_input_buffer()
 
-while True:
-    if reset_mov:
-        print("Resetting!")
-        reset_mov = False
-        time.sleep(3)
-        main_mover, slave_mover = reinit_movers(main_mover, slave_mover)
 
-    # Resetting list with current values of movement
-    acc_values = list()
+try:
+    while True:
+        if reset_mov:
+            print("Resetting!")
+            reset_mov = False
+            time.sleep(3)
+            main_mover, slave_mover = reinit_movers(main_mover, slave_mover)
 
-    if len(main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
+        # Resetting list with current values of movement
+        acc_values = list()
 
-        # Guess movement
-        main_prediction = Counter(main_prediction_list).most_common(1)[0][0]
-        slave_prediction = Counter(slave_prediction_list).most_common(1)[0][0]
+        if len(main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
 
-        # Resets lists
-        main_prediction_list = list()
-        slave_prediction_list = list()
+            # Guess movement
+            main_prediction = Counter(main_prediction_list).most_common(1)[0][0]
+            slave_prediction = Counter(slave_prediction_list).most_common(1)[0][0]
 
-    acc_values = read_decode_data(main_mover, 'main', acc_values)
-    acc_values = read_decode_data(main_mover, 'slave', acc_values)
+            # Resets lists
+            main_prediction_list = list()
+            slave_prediction_list = list()
 
-    try:
-        # Predict type of movement
-        prediction = knn.predict(acc_values)
+        acc_values = read_decode_data(main_mover, 'main', acc_values)
+        acc_values = read_decode_data(main_mover, 'slave', acc_values)
 
-        main_prediction_list.append(prediction[0])
-        slave_prediction_list.append(prediction[1])
+        try:
+            # Predict type of movement
+            predictions = knn.predict(acc_values)
 
-        print(prediction)
-        print(acc_values)
-        print('--------------------')
-    except ValueError:
-        pass
+            controller.set_analog(predictions)
+            main_prediction_list.append(predictions[0])
+            slave_prediction_list.append(predictions[1])
 
-    # Using values from the prediction, we guess what movement the user is doing
-    counter += 1
+            #print(predictions)
+            #print(acc_values)
+            #print('--------------------')
+        except ValueError:
+            pass
+
+        # Using values from the prediction, we guess what movement the user is doing
+        counter += 1
+except SerialException:
+    print("Mover disconnected!")
 
 
 
