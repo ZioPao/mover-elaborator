@@ -1,7 +1,7 @@
 import pyxinput
 
 #####################
-DEBUG = 1
+DEBUG = 0
 #####################
 
 LEFT_AXIS_X = 'AxisLx'

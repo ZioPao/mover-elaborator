@@ -70,7 +70,7 @@ def init_movers():
         return mov_master, mov_slave
     else:
         print("Couldn't find the devices!")
-        exit(0)
+        return None, None
 
 
 def reinit_movers(m_mover, s_mover):
@@ -142,6 +142,10 @@ window.mainloop()
 
 print("------------MOVER MANAGER------------\n")
 main_mover, slave_mover = init_movers()
+
+if main_mover is None or slave_mover is None:
+    exit(0)
+
 counter = 0
 start_listener()
 
@@ -161,14 +165,18 @@ knn = pickle.load(open('model2.bin', 'rb'))
 print("Start")
 main_mover.reset_input_buffer()
 
+while True:
+    try:
 
-try:
-    while True:
+        # check status of slave. if it's disconnected, it will throw SerialException
+        slave_mover.read()
+
         if reset_mov:
             print("Resetting!")
             reset_mov = False
             time.sleep(3)
             main_mover, slave_mover = reinit_movers(main_mover, slave_mover)
+
 
         # Resetting list with current values of movement
         acc_values = list()
@@ -194,16 +202,21 @@ try:
             main_prediction_list.append(predictions[0])
             slave_prediction_list.append(predictions[1])
 
-            #print(predictions)
-            #print(acc_values)
-            #print('--------------------')
+            print(predictions)
+            print(acc_values)
+            print('--------------------')
         except ValueError:
             pass
 
         # Using values from the prediction, we guess what movement the user is doing
         counter += 1
-except SerialException:
-    print("Mover disconnected!")
+    except SerialException:
+        print("Mover disconnected! Retrying initialization")
+        main_mover = None
+        slave_mover = None
+        while main_mover is None or slave_mover is None:
+            main_mover, slave_mover = init_movers()
+        reset_mov = True
 
 
 
