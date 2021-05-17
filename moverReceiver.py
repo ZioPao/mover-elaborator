@@ -31,10 +31,10 @@ MAX_LEN_PREDICTION_LIST = 4
 reset_mov = False
 should_run_thread = False
 
-
-
-
 ########################################################################################
+
+# Startup moverReceiver
+
 
 class MoverReceiver:
 
@@ -54,8 +54,8 @@ class MoverReceiver:
         self.main_prediction_list = []
         self.slave_prediction_list = []
 
-        self.predictions = [-1,-1]
-        self.acc_values = []
+        self.predictions = [-1, -1]
+        self.acc_values = [[-1, -1, -1], [-1, -1, -1]]
 
     def init_movers(self):
 
@@ -209,6 +209,8 @@ class MoverReceiver:
         return self.predictions
 
 
+    def get_current_acceleration_values(self):
+        return self.acc_values
 
 mov = MoverReceiver()
 
@@ -219,27 +221,53 @@ class GUI:
 
         # Setup GUI
         self.window = tk.Tk()
-        self.window.geometry("400x200")
+        self.window.minsize(250, 250)
+        self.window.maxsize(250, 250)
         self.window.title("Mover Receiver")
 
-        self.main_frame = tk.Frame(self.window, width=300, height=50)
-        self.main_frame.pack(side=tk.LEFT)
+        self.main_frame = tk.Frame(self.window, relief=tk.RAISED)
+        self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.main_label = tk.Label(self.main_frame, text="Main operations")
-        self.main_label.pack(side=tk.LEFT)
+        #self.main_label = tk.Label(self.main_frame, text="Main operations")
+        #self.main_label.pack(side=tk.TOP, anchor=tk.NW)
 
         self.start_button = tk.Button(self.main_frame, text='Start', command=mov.startup_threaded_loop)
-        self.start_button.pack(side=tk.LEFT)
+        self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
         self.stop_button = tk.Button(self.main_frame, text='Stop', command=mov.stop_currently_running_thread)
-        self.stop_button.pack(side=tk.LEFT)
+        self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
         self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: mov.set_reset_mov(True))
-        self.reset_button.pack(side=tk.RIGHT)
+        self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+
+        self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
+        self.label_frame_main.config(bg='white')
+        self.label_frame_main.pack(fill="both", expand="yes")
+
+        self.label_frame_master = tk.LabelFrame(self.label_frame_main)
+        self.label_frame_master.pack(fill="both", expand="yes")
+
+        self.infos_m_label = tk.Label(self.label_frame_master, text='Master -> ')
+        self.infos_m_label.config(bg='white')
+        self.infos_m_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+        self.infos_m = tk.Label(self.label_frame_master, text="tmp")
+        self.infos_m.config(bg='white')
+        self.infos_m.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+
+        self.label_frame_slave = tk.LabelFrame(self.label_frame_main)
+        self.label_frame_slave.pack(fill="both", expand="yes")
+
+        self.infos_s_label = tk.Label(self.label_frame_slave, text='Slave -> ')
+        self.infos_s_label.config(bg='white')
+        self.infos_s_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+        self.infos_s = tk.Label(self.label_frame_slave, text="tmp")
+        self.infos_s.config(bg='white')
+        self.infos_s.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+
 
 
         self.prediction_frame = tk.Frame(self.window)
-        self.prediction_frame.pack(side=tk.BOTTOM)
+        self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
 
         self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
         self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
@@ -248,16 +276,26 @@ class GUI:
         self.prediction_label_m.pack(side=tk.LEFT)
         self.prediction_label_s.pack(side=tk.LEFT)
 
-        self.update_preds()
+        self.update_values()
         self.window.mainloop()
 
-    def update_preds(self):
+    def update_values(self):
+        acc_values = mov.get_current_acceleration_values()
+
+        try:
+            self.infos_m['text'] = str(acc_values[0][0]) + ", " + str(acc_values[0][1]) + ", " + str(acc_values[0][2])
+            self.infos_s['text'] = str(acc_values[1][0]) + ", " + str(acc_values[1][1]) + ", " + str(acc_values[1][2])
+
+        except IndexError:
+            pass
+
         preds = mov.get_current_prediction()
         self.prediction_label_m['text'] = preds[0]
         self.prediction_label_s['text'] = preds[1]
-        self.prediction_frame.after(1, self.update_preds)
+        self.prediction_frame.after(1, self.update_values)
 
 
+# Startup of the GUI
 
 gui = GUI()
 
