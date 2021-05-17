@@ -53,6 +53,8 @@ class MoverReceiver:
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
+
+        self.predictions = [-1,-1]
         self.acc_values = []
 
     def init_movers(self):
@@ -168,13 +170,13 @@ class MoverReceiver:
 
                 try:
                     # Predict type of movement
-                    predictions = self.knn.predict(self.acc_values)
+                    self.predictions = self.knn.predict(self.acc_values)
 
-                    self.controller.set_analog(predictions)
-                    self.main_prediction_list.append(predictions[0])
-                    self.slave_prediction_list.append(predictions[1])
+                    self.controller.set_analog(self.predictions)
+                    self.main_prediction_list.append(self.predictions[0])
+                    self.slave_prediction_list.append(self.predictions[1])
 
-                    print(predictions)
+                    print(self.predictions)
                     print(self.acc_values)
                     print('--------------------')
                 except ValueError:
@@ -202,6 +204,9 @@ class MoverReceiver:
     def set_reset_mov(self, var):
         self.reset_mov = var
 
+
+    def get_current_prediction(self):
+        return self.predictions
 
 
 
@@ -232,16 +237,25 @@ class GUI:
         self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: mov.set_reset_mov(True))
         self.reset_button.pack(side=tk.RIGHT)
 
+
+        self.prediction_frame = tk.Frame(self.window)
+        self.prediction_frame.pack(side=tk.BOTTOM)
+
+        self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
+        self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
+        self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
+        self.prediction_label_main.pack(side=tk.LEFT)
+        self.prediction_label_m.pack(side=tk.LEFT)
+        self.prediction_label_s.pack(side=tk.LEFT)
+
+        self.update_preds()
         self.window.mainloop()
 
-    def start_background_loop(self):
-        global should_run_thread
-        should_run_thread = True
-        self.thread.start()
-
-    def stop_background_loop(self):
-        global should_run_thread
-        should_run_thread = False
+    def update_preds(self):
+        preds = mov.get_current_prediction()
+        self.prediction_label_m['text'] = preds[0]
+        self.prediction_label_s['text'] = preds[1]
+        self.prediction_frame.after(1, self.update_preds)
 
 
 
