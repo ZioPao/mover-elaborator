@@ -222,6 +222,7 @@ class GUI:
 
         # Setup GUI
         self.window = tk.Tk()
+        self.window.iconbitmap(r'favicon.ico')
         self.window.minsize(250, 250)
         self.window.maxsize(250, 250)
         self.window.title("Mover Receiver")
