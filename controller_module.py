@@ -15,11 +15,14 @@ CURR_ANALOG_KEY = 'current'
 # 2 = Upstairs (Maybe reusable for jumping?)
 # 6 = Stopped
 JOGGING_INCREMENT = 0.1
+JOGGING_DECREASE = 0.015
 JOGGING_TOP = 1
-WALKING_INCREMENT = 0.05
+
+WALKING_INCREMENT = 0.1
+WALKING_DECREASE = 0.005
 WALKING_TOP = 0.2
 
-STOPPED_DECREMENT = 0.15
+STOPPED_DECREMENT = 0.05        # needs some sort of weightning system
 STOPPED_MIN = 0.05
 
 
@@ -37,7 +40,7 @@ class Controller:
         self.analog_values = {'old': [0, 0], 'current': [0, 0]}
         self.prev_prediction = None
 
-    def get_new_analog_values(self, increment, top_value):
+    def get_new_analog_values(self, increment, decrease, top_value, ):
         if self.analog_values[OLD_ANALOG_KEY][1] < top_value:
             #self.analog_values[OLD_ANALOG_KEY][0] < top_value and \
 
@@ -46,7 +49,7 @@ class Controller:
             new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + increment
         else:
             #new_x_value = self.analog_values[OLD_ANALOG_KEY][0]
-            new_y_value = top_value
+            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - decrease     # decreases
 
         new_x_value = 0     # delete me
         return new_x_value, new_y_value
@@ -75,10 +78,10 @@ class Controller:
 
         if prediction == 0.:
             # jogging
-            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_TOP)
+            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP )
         if prediction == 1.:
             # walking
-            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_TOP)
+            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT,WALKING_DECREASE, WALKING_TOP)
         if prediction == 2.:
             # upstairs
             pass

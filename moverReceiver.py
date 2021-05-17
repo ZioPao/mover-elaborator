@@ -26,11 +26,6 @@ from controller_module import Controller
 DATA_DIVIDER = 1000
 MAX_LEN_PREDICTION_LIST = 4
 
-
-# Globals
-reset_mov = False
-should_run_thread = False
-
 ########################################################################################
 
 # Startup moverReceiver
@@ -107,6 +102,7 @@ class MoverReceiver:
         self.slave_mover.write(b'c')
         print("Resetted Master -> COM" + str(self.id_master))
         print("Resetted Slave -> COM" + str(self.id_slave))
+        self.reset_mov = False
 
     def initial_setup(self):
 
@@ -148,7 +144,6 @@ class MoverReceiver:
 
                 if self.reset_mov:
                     print("Resetting!")
-                    self.reset_mov = False
                     time.sleep(3)
                     self.re_init_movers()
 
@@ -193,13 +188,19 @@ class MoverReceiver:
     # External variables
 
     def startup_threaded_loop(self):
-        self.should_run_thread = True       # to keep it looping
-        self.thread = threading.Thread(target=self.loop, args=()).start()
+
+        if self.should_run_thread is False:
+            self.should_run_thread = True       # to keep it looping
+            self.thread = threading.Thread(target=self.loop, args=()).start()
 
     def stop_currently_running_thread(self):
-        print("Stopping loop...")
-        self.should_run_thread = False
-        self.main_mover.flushInput()        # To stop completely
+
+        if self.should_run_thread:
+            print("Stopping loop...")
+            self.should_run_thread = False
+            self.main_mover.flushInput()        # To stop completely
+        else:
+            print("It's not running right now!")
 
     def set_reset_mov(self, var):
         self.reset_mov = var
@@ -236,14 +237,16 @@ class GUI:
 
         self.stop_button = tk.Button(self.main_frame, text='Stop', command=mov.stop_currently_running_thread)
         self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+        self.stop_button.config(fg='black')
 
         self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: mov.set_reset_mov(True))
         self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+        self.reset_button.config(fg='black')
 
         # Controller related stuff
         self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
         self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.controller_label = tk.Label(self.controller_frame, text="tmp")
+        self.controller_label = tk.Label(self.controller_frame, text="")
         self.controller_label.pack()
 
 
@@ -291,6 +294,17 @@ class GUI:
         self.window.mainloop()
 
     def update_values(self):
+
+        if mov.should_run_thread:
+            self.start_button.config(fg='red')
+        else:
+            self.start_button.config(fg='black')
+
+        if mov.reset_mov:
+            self.reset_button.config(fg='red')
+        else:
+            self.reset_button.config(fg='black')
+
 
         controller_values = mov.controller.get_y_axis()
         controller_string = 'tmp'
