@@ -176,9 +176,9 @@ class MoverReceiver:
                     self.main_prediction_list.append(self.predictions[0])
                     self.slave_prediction_list.append(self.predictions[1])
 
-                    print(self.predictions)
-                    print(self.acc_values)
-                    print('--------------------')
+                    #print(self.predictions)
+                    #print(self.acc_values)
+                    #print('--------------------')
                 except ValueError:
                     pass
 
@@ -240,6 +240,15 @@ class GUI:
         self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: mov.set_reset_mov(True))
         self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
+        # Controller related stuff
+        self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
+        self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.controller_label = tk.Label(self.controller_frame, text="tmp")
+        self.controller_label.pack()
+
+
+        #get_y_axis
+
         self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
         self.label_frame_main.config(bg='white')
         self.label_frame_main.pack(fill="both", expand="yes")
@@ -273,13 +282,42 @@ class GUI:
         self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
         self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
         self.prediction_label_main.pack(side=tk.LEFT)
+        self.prediction_label_m.config(fg='red')
         self.prediction_label_m.pack(side=tk.LEFT)
+        self.prediction_label_s.config(fg='red')
         self.prediction_label_s.pack(side=tk.LEFT)
 
         self.update_values()
         self.window.mainloop()
 
     def update_values(self):
+
+        controller_values = mov.controller.get_y_axis()
+        controller_string = 'tmp'
+
+        if -0.2 < controller_values <= 0.1:
+            controller_string = '->'
+        if 0.1 < controller_values <= 0.2:
+            controller_string = '-->'
+        if 0.2 < controller_values <= 0.3:
+            controller_string = '--->'
+        if 0.3 < controller_values <= 0.4:
+            controller_string = '---->'
+        if 0.4 < controller_values <= 0.5:
+            controller_string = '----->'
+        if 0.5 < controller_values <= 0.6:
+            controller_string = '------>'
+        if 0.6 < controller_values <= 0.7:
+            controller_string = '------->'
+        if 0.7 < controller_values <= 0.8:
+            controller_string = '-------->'
+        if 0.8 < controller_values <= 0.9:
+            controller_string = '--------->'
+        if 0.9 < controller_values <= 1:
+            controller_string = '---------->'
+
+        self.controller_label['text'] = controller_string
+
         acc_values = mov.get_current_acceleration_values()
 
         try:

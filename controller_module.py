@@ -105,3 +105,6 @@ class Controller:
         # back them up
         self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
         self.analog_values[CURR_ANALOG_KEY] = [new_x_value, new_y_value]
+
+    def get_y_axis(self):
+        return self.analog_values[CURR_ANALOG_KEY][1]
