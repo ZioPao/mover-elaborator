@@ -57,17 +57,29 @@ class Controller:
     def set_analog(self, preds):
 
         # todo how do we use Z? as a multiplier?
-        first_prediction = preds[0]
-        second_prediction = preds[1]
+        try:
+            first_prediction = preds[0]
+            second_prediction = preds[1]
 
-        if first_prediction != second_prediction:
-            # uses old prediction to guess which one to use
-            if self.prev_prediction == first_prediction:
-                self.choose_prediction(first_prediction)
+            if first_prediction == 6. and second_prediction == 6.:
+                self.choose_prediction(6.)
+
             else:
-                self.choose_prediction(second_prediction)
-        else:
-            self.choose_prediction(first_prediction)
+                # only one is stopped
+                if (first_prediction == 6.) ^ (second_prediction == 6.):
+
+                    if first_prediction == 6.:
+                        self.choose_prediction(second_prediction)
+                    else:
+                        self.choose_prediction(first_prediction)
+                else:
+                    if self.prev_prediction == first_prediction:
+                        self.choose_prediction(first_prediction)
+                    else:
+                        self.choose_prediction(second_prediction)
+
+        except IndexError:
+            pass
 
     def choose_prediction(self, prediction):
         # todo better if ints and not floats
@@ -87,12 +99,11 @@ class Controller:
             pass
         if prediction == 6.:        # todo change it to 3
             # stopped
-            if STOPPED_RANGE > self.analog_values[OLD_ANALOG_KEY][1] > -STOPPED_RANGE: #and \
-                    #STOPPED_RANGE > self.analog_values[OLD_ANALOG_KEY][0] > -STOPPED_RANGE:
+
+            if -0.1 < self.analog_values[OLD_ANALOG_KEY][1] < STOPPED_RANGE:
                 new_x_value = 0
                 new_y_value = 0
             else:
-                #new_x_value = self.analog_values[OLD_ANALOG_KEY][0] - STOPPED_DECREMENT
                 new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - STOPPED_DECREMENT
 
         if DEBUG:
