@@ -22,11 +22,11 @@ WALKING_INCREMENT = 0.1
 WALKING_DECREASE = 0.005
 WALKING_TOP = 0.2
 
-STOPPED_DECREMENT = 0.05        # needs some sort of weightning system
+STOPPED_DECREMENT = 0.1        # needs some sort of weightning system
 STOPPED_MIN = 0.05
 
 
-STOPPED_RANGE = 0.1
+STOPPED_RANGE = 0.15
 #UPSTAIRS_INCREMENT = ..
 
 
@@ -78,10 +78,10 @@ class Controller:
 
         if prediction == 0.:
             # jogging
-            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP )
+            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP)
         if prediction == 1.:
             # walking
-            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT,WALKING_DECREASE, WALKING_TOP)
+            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_DECREASE, WALKING_TOP)
         if prediction == 2.:
             # upstairs
             pass

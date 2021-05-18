@@ -2,7 +2,6 @@ import time
 import serial
 from serial import SerialException
 import tkinter as tk
-from pynput.keyboard import KeyCode, Listener
 import re
 import pickle
 from collections import Counter
@@ -20,11 +19,11 @@ from controller_module import Controller
 # // = Standing (Useless)
 # // = Sitting (Useless)
 
-
-
 # Miscellaneous
 DATA_DIVIDER = 1000
 MAX_LEN_PREDICTION_LIST = 4
+
+DEBUG = 1
 
 ########################################################################################
 
@@ -61,11 +60,11 @@ class MoverReceiver:
         while (mov_master_tmp and mov_slave_tmp) is None:
 
             try:
-                mov_tmp = serial.Serial('COM' + str(id_tmp))
+                mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.1)
                 ser_bytes_tmp = mov_tmp.readline()
                 decoded_bytes_tmp = ser_bytes_tmp.decode()
 
-                    # todo rewrite this
+                # todo rewrite this
                 if re.match('MASTER', decoded_bytes_tmp):
                     mov_master_tmp = mov_tmp
                     mov_master_tmp.write(b'c')
@@ -127,13 +126,17 @@ class MoverReceiver:
             ser_bytes = self.main_mover.readline()
             decoded_bytes = ser_bytes.decode()
         else:
-            ser_bytes_data_line = self.main_mover.readline()
-            decoded_bytes_data_line = ser_bytes_data_line.decode()
-            regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line)[0]
+            try:
+                ser_bytes_data_line = self.main_mover.readline()
+                decoded_bytes_data_line = ser_bytes_data_line.decode()
+                regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line[:-2])[0]
 
-            self.acc_values.append([float(regex_search[0]) / DATA_DIVIDER,
-                                    float(regex_search[1]) / DATA_DIVIDER,
-                                    float(regex_search[2]) / DATA_DIVIDER])
+
+                self.acc_values.append([float(regex_search[0]) / DATA_DIVIDER,
+                                        float(regex_search[1]) / DATA_DIVIDER,
+                                        float(regex_search[2]) / DATA_DIVIDER])
+            except Exception as e:
+                print(e)
 
     def loop(self):
         while self.should_run_thread:
@@ -171,9 +174,11 @@ class MoverReceiver:
                     self.main_prediction_list.append(self.predictions[0])
                     self.slave_prediction_list.append(self.predictions[1])
 
-                    #print(self.predictions)
-                    #print(self.acc_values)
-                    #print('--------------------')
+                    if DEBUG:
+                        print(self.predictions)
+                        print(self.acc_values)
+                        print('--------------------')
+
                 except ValueError:
                     pass
 
@@ -205,27 +210,24 @@ class MoverReceiver:
     def set_reset_mov(self, var):
         self.reset_mov = var
 
-
     def get_current_prediction(self):
         return self.predictions
-
 
     def get_current_acceleration_values(self):
         return self.acc_values
 
-mov = MoverReceiver()
-
-
 class GUI:
 
-    def __init__(self):
+    def __init__(self, mover):
 
         # Setup GUI
+        self.mover = mover
+
         self.window = tk.Tk()
         self.window.iconbitmap(r'favicon.ico')
         self.window.minsize(250, 250)
         self.window.maxsize(250, 250)
-        self.window.title("Mover Receiver")
+        self.window.title("Mover Manager")
 
         self.main_frame = tk.Frame(self.window, relief=tk.RAISED)
         self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -233,14 +235,14 @@ class GUI:
         #self.main_label = tk.Label(self.main_frame, text="Main operations")
         #self.main_label.pack(side=tk.TOP, anchor=tk.NW)
 
-        self.start_button = tk.Button(self.main_frame, text='Start', command=mov.startup_threaded_loop)
+        self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
         self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
-        self.stop_button = tk.Button(self.main_frame, text='Stop', command=mov.stop_currently_running_thread)
+        self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
         self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
         self.stop_button.config(fg='black')
 
-        self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: mov.set_reset_mov(True))
+        self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: self.mover.set_reset_mov(True))
         self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
         self.reset_button.config(fg='black')
 
@@ -277,8 +279,6 @@ class GUI:
         self.infos_s.config(bg='white')
         self.infos_s.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
 
-
-
         self.prediction_frame = tk.Frame(self.window)
         self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
 
@@ -296,18 +296,17 @@ class GUI:
 
     def update_values(self):
 
-        if mov.should_run_thread:
+        if self.mover.should_run_thread:
             self.start_button.config(fg='red')
         else:
             self.start_button.config(fg='black')
 
-        if mov.reset_mov:
+        if self.mover.reset_mov:
             self.reset_button.config(fg='red')
         else:
             self.reset_button.config(fg='black')
 
-
-        controller_values = mov.controller.get_y_axis()
+        controller_values = self.mover.controller.get_y_axis()
         controller_string = 'tmp'
 
         if -0.2 < controller_values <= 0.1:
@@ -328,12 +327,11 @@ class GUI:
             controller_string = '-------->'
         if 0.8 < controller_values <= 0.9:
             controller_string = '--------->'
-        if 0.9 < controller_values <= 1:
+        if 0.9 < controller_values <= 1.5:      # includes a little bit of float error
             controller_string = '---------->'
 
         self.controller_label['text'] = controller_string
-
-        acc_values = mov.get_current_acceleration_values()
+        acc_values = self.mover.get_current_acceleration_values()
 
         try:
             self.infos_m['text'] = str(acc_values[0][0]) + ", " + str(acc_values[0][1]) + ", " + str(acc_values[0][2])
@@ -342,14 +340,16 @@ class GUI:
         except IndexError:
             pass
 
-        preds = mov.get_current_prediction()
+        preds = self.mover.get_current_prediction()
         self.prediction_label_m['text'] = preds[0]
         self.prediction_label_s['text'] = preds[1]
         self.prediction_frame.after(1, self.update_values)
 
 
-# Startup of the GUI
+# Startup
 
-gui = GUI()
+mov = MoverReceiver()
+
+gui = GUI(mov)
 
 
