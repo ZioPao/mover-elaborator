@@ -11,6 +11,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn import svm
 from sklearn.neighbors import NearestCentroid
+from sklearn.neighbors import RadiusNeighborsClassifier
 import time
 
 # what if I "fixed" the current dataset with my values?
@@ -54,21 +55,22 @@ print("CURRENT X_TEST")
 print(X_test)
 y_test = y[indices[-10:]]
 
-#knn = KNeighborsClassifier()
+knn = KNeighborsClassifier(n_neighbors=2)
 #print("Init CLF")
 #clf = svm.SVC()
 print("Init Gaussian")
-nc = NearestCentroid()
+#nc = NearestCentroid()
+#rnc = RadiusNeighborsClassifier()
 
 y_train = y_train.astype(float)
 
 print("Training....")
-nc.fit(X_train, y_train)
+knn.fit(X_train, y_train)
 print("Finished training")
-pickle.dump(nc, open('modelnc.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model3.bin', 'wb'))
 #loaded_model = pickle.load(open('model.bin', 'rb'))
 
-test = nc.predict(X_test)
+test = knn.predict(X_test)
 
 print("trained X_TEST")
 print(X_test)
