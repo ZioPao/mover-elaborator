@@ -9,7 +9,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 from sklearn.cluster import KMeans
-
+from sklearn import svm
+from sklearn.neighbors import NearestCentroid
 import time
 
 # what if I "fixed" the current dataset with my values?
@@ -53,17 +54,21 @@ print("CURRENT X_TEST")
 print(X_test)
 y_test = y[indices[-10:]]
 
-knn = KNeighborsClassifier()
+#knn = KNeighborsClassifier()
+#print("Init CLF")
+#clf = svm.SVC()
+print("Init Gaussian")
+nc = NearestCentroid()
 
 y_train = y_train.astype(float)
 
-
-knn.fit(X_train, y_train)
-
-#pickle.dump(knn, open('model3.bin', 'wb'))
+print("Training....")
+nc.fit(X_train, y_train)
+print("Finished training")
+pickle.dump(nc, open('modelnc.bin', 'wb'))
 #loaded_model = pickle.load(open('model.bin', 'rb'))
 
-test = knn.predict(X_test)
+test = nc.predict(X_test)
 
 print("trained X_TEST")
 print(X_test)

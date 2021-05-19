@@ -43,7 +43,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('model2.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('modelnc.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []

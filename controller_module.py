@@ -61,14 +61,14 @@ class Controller:
             first_prediction = preds[0]
             second_prediction = preds[1]
 
-            if first_prediction == 6. and second_prediction == 6.:
-                self.choose_prediction(6.)
+            if first_prediction == 3. and second_prediction == 3.:
+                self.choose_prediction(3.)
 
             else:
                 # only one is stopped
-                if (first_prediction == 6.) ^ (second_prediction == 6.):
+                if (first_prediction == 3.) ^ (second_prediction == 3.):
 
-                    if first_prediction == 6.:
+                    if first_prediction == 3.:
                         self.choose_prediction(second_prediction)
                     else:
                         self.choose_prediction(first_prediction)
@@ -97,7 +97,7 @@ class Controller:
         if prediction == 2.:
             # upstairs
             pass
-        if prediction == 6.:        # todo change it to 3
+        if prediction == 3.:
             # stopped
 
             if -0.1 < self.analog_values[OLD_ANALOG_KEY][1] < STOPPED_RANGE:
