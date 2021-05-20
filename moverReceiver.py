@@ -35,10 +35,7 @@ class MoverReceiver:
 
     def __init__(self):
 
-        self.b, self.a = sm.signal.build_filter(frequency=10,
-                                      sample_rate=100,
-                                      filter_type='low',
-                                      filter_order=4)
+        self.b, self.a = sm.signal.build_filter(frequency=10, sample_rate=500, filter_type='low',  filter_order=4)
 
         # One time setup
         self.thread = None
@@ -150,7 +147,7 @@ class MoverReceiver:
                 raw_z = float(regex_search[2]) / DATA_DIVIDER
 
 
-                if len(self.raw_values_x) > 20:
+                if len(self.raw_values_x) > 15:
                     self.raw_values_x.pop()
                     self.raw_values_y.pop()
                     self.raw_values_z.pop()
@@ -392,7 +389,6 @@ class GUI:
 
             preds = self.mover.get_current_prediction()
 
-            print(preds)
             self.prediction_label_m['text'] = preds[0]
             self.prediction_label_s['text'] = preds[1]
         except (IndexError, TypeError):
