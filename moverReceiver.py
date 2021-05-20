@@ -6,6 +6,7 @@ import re
 import pickle
 from collections import Counter
 import threading
+import sensormotion as sm
 
 from controller_module import Controller
 
@@ -23,7 +24,7 @@ from controller_module import Controller
 DATA_DIVIDER = 1000
 MAX_LEN_PREDICTION_LIST = 4
 
-DEBUG = 1
+DEBUG = 0
 
 ########################################################################################
 
@@ -33,6 +34,12 @@ DEBUG = 1
 class MoverReceiver:
 
     def __init__(self):
+
+        self.b, self.a = sm.signal.build_filter(frequency=10,
+                                      sample_rate=100,
+                                      filter_type='low',
+                                      filter_order=4)
+
         # One time setup
         self.thread = None
         self.reset_mov = False
@@ -43,13 +50,20 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('model4.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model3.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
 
         self.predictions = [-1, -1]
         self.acc_values = [[-1, -1, -1], [-1, -1, -1]]
+
+        self.raw_values_x = list()
+        self.raw_values_y = list()
+        self.raw_values_z = list()
+
+        self.doing_prediction = False
+
 
     def init_movers(self):
 
@@ -131,10 +145,32 @@ class MoverReceiver:
                 decoded_bytes_data_line = ser_bytes_data_line.decode()
                 regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line[:-2])[0]
 
+                raw_x = float(regex_search[0]) / DATA_DIVIDER
+                raw_y = float(regex_search[1]) / DATA_DIVIDER
+                raw_z = float(regex_search[2]) / DATA_DIVIDER
 
-                self.acc_values.append([float(regex_search[0]) / DATA_DIVIDER,
-                                        float(regex_search[1]) / DATA_DIVIDER,
-                                        float(regex_search[2]) / DATA_DIVIDER])
+
+                if len(self.raw_values_x) > 20:
+                    self.raw_values_x.pop()
+                    self.raw_values_y.pop()
+                    self.raw_values_z.pop()
+
+                self.raw_values_x.append(raw_x)
+                self.raw_values_y.append(raw_y)
+                self.raw_values_z.append(raw_z)
+
+                try:
+                    x_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_x)
+                    y_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_y)
+                    z_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_z)
+
+                    if len(self.acc_values) > 1:
+                        self.acc_values.pop()       # todo fix this
+
+                    self.acc_values.append([x_filtered[0], y_filtered[0], z_filtered[0]])
+                except ValueError:
+                    pass
+
             except Exception as e:
                 print(e)
 
@@ -150,36 +186,37 @@ class MoverReceiver:
                     time.sleep(3)
                     self.re_init_movers()
 
-                # Resetting list with current values of movement
-                self.acc_values = list()
-
-                if len(self.main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(
-                        self.slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
+               # if len(self.main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(
+                #        self.slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
                     # Guess movement
-                    main_prediction = Counter(self.main_prediction_list).most_common(1)[0][0]
-                    slave_prediction = Counter(self.slave_prediction_list).most_common(1)[0][0]
+                    #main_prediction = Counter(self.main_prediction_list).most_common(1)[0][0]
+                    #slave_prediction = Counter(self.slave_prediction_list).most_common(1)[0][0]
 
-                    # Resets lists
-                    self.main_prediction_list = list()
-                    self.slave_prediction_list = list()
 
+                    #self.main_prediction_list = list()
+                    #self.slave_prediction_list = list()
+
+                # Resets lists
+                self.acc_values = list()
                 self.read_decode_data('main')
                 self.read_decode_data('slave')
 
                 try:
                     # Predict type of movement
+                    self.doing_prediction = True
                     self.predictions = self.knn.predict(self.acc_values)
+                    self.doing_prediction = False
 
                     self.controller.set_analog(self.predictions)
-                    self.main_prediction_list.append(self.predictions[0])
-                    self.slave_prediction_list.append(self.predictions[1])
+                    #self.main_prediction_list.append(self.predictions[0])
+                    #self.slave_prediction_list.append(self.predictions[1])
 
                     if DEBUG:
                         print(self.predictions)
                         print(self.acc_values)
                         print('--------------------')
 
-                except ValueError:
+                except (ValueError, IndexError):
                     pass
 
             except SerialException:
@@ -211,10 +248,17 @@ class MoverReceiver:
         self.reset_mov = var
 
     def get_current_prediction(self):
+        if self.doing_prediction:
+            return None
+
         return self.predictions
 
-    def get_current_acceleration_values(self):
+    def get_current_acceleration(self):
+
         return self.acc_values
+
+
+
 
 class GUI:
 
@@ -296,6 +340,7 @@ class GUI:
 
     def update_values(self):
 
+
         if self.mover.should_run_thread:
             self.start_button.config(fg='red')
         else:
@@ -331,25 +376,34 @@ class GUI:
             controller_string = '---------->'
 
         self.controller_label['text'] = controller_string
-        acc_values = self.mover.get_current_acceleration_values()
 
         try:
-            self.infos_m['text'] = str(acc_values[0][0]) + ", " + str(acc_values[0][1]) + ", " + str(acc_values[0][2])
-            self.infos_s['text'] = str(acc_values[1][0]) + ", " + str(acc_values[1][1]) + ", " + str(acc_values[1][2])
+            acc_values = self.mover.get_current_acceleration()
+
+            self.infos_m['text'] = str(f'{acc_values[0][0]:.2f}') + ", " + str(f'{acc_values[0][1]:.2f}') + ", " \
+                                   + str(f'{acc_values[0][2]:.2f}')
+            self.infos_s['text'] = str(f'{acc_values[1][0]:.2f}') + ", " + str(f'{acc_values[1][1]:.2f}') + ", " \
+                                   + str(f'{acc_values[1][2]:.2f}')
 
         except IndexError:
             pass
 
-        preds = self.mover.get_current_prediction()
-        self.prediction_label_m['text'] = preds[0]
-        self.prediction_label_s['text'] = preds[1]
-        self.prediction_frame.after(1, self.update_values)
+        try:
+
+            preds = self.mover.get_current_prediction()
+
+            print(preds)
+            self.prediction_label_m['text'] = preds[0]
+            self.prediction_label_s['text'] = preds[1]
+        except (IndexError, TypeError):
+            print("Error during prediction printing")
+
+        self.main_frame.after(1, self.update_values)
 
 
 # Startup
 
 mov = MoverReceiver()
-
+#mov.should_run_thread = True
+#mov.loop()
 gui = GUI(mov)
-
-
