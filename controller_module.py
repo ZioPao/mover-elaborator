@@ -13,7 +13,7 @@ CURR_ANALOG_KEY = 'current'
 # 0 = Jogging
 # 1 = Walking
 # 2 = Upstairs (Maybe reusable for jumping?)
-# 6 = Stopped
+# 3 = Stopped
 JOGGING_INCREMENT = 0.1
 JOGGING_DECREASE = 0.015
 JOGGING_TOP = 1
@@ -56,7 +56,9 @@ class Controller:
 
     def set_analog(self, preds):
 
-        # todo how do we use Z? as a multiplier?
+
+        # if there is only one 3, then we have to ignore it and choose the latter
+
         try:
             first_prediction = preds[0]
             second_prediction = preds[1]

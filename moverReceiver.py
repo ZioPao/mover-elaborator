@@ -4,7 +4,6 @@ from serial import SerialException
 import tkinter as tk
 import re
 import pickle
-from collections import Counter
 import threading
 import sensormotion as sm
 
@@ -15,27 +14,23 @@ from controller_module import Controller
 # 0 = Jogging
 # 1 = Walking
 # 2 = Upstairs (Maybe reusable for jumping?)
-# 6 = Stopped
-# // = Downstairs (Useless)
-# // = Standing (Useless)
-# // = Sitting (Useless)
+# 3 = Stopped
+
 
 # Miscellaneous
-DATA_DIVIDER = 1000
+DATA_DIVIDER = 100
 MAX_LEN_PREDICTION_LIST = 4
 
-DEBUG = 0
+DEBUG = 1
 
 ########################################################################################
-
-# Startup moverReceiver
 
 
 class MoverReceiver:
 
     def __init__(self):
 
-        self.b, self.a = sm.signal.build_filter(frequency=10, sample_rate=500, filter_type='low',  filter_order=4)
+        self.b, self.a = sm.signal.build_filter(frequency=10, sample_rate=100, filter_type='low',  filter_order=4)
 
         # One time setup
         self.thread = None
@@ -61,7 +56,6 @@ class MoverReceiver:
 
         self.doing_prediction = False
 
-
     def init_movers(self):
 
         mov_master_tmp = None
@@ -71,7 +65,7 @@ class MoverReceiver:
         while (mov_master_tmp and mov_slave_tmp) is None:
 
             try:
-                mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.1)
+                mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.01)
                 ser_bytes_tmp = mov_tmp.readline()
                 decoded_bytes_tmp = ser_bytes_tmp.decode()
 
@@ -127,51 +121,32 @@ class MoverReceiver:
 
     # Looping stuff
 
-    def read_decode_data(self, search_string):
+    def read_decode_data(self):
+        try:
+            ser_bytes_data_line = self.main_mover.readline()
+            decoded_bytes_data_line = ser_bytes_data_line.decode()
+            print(decoded_bytes_data_line)
+            regex_search = re.findall('m (\S*),(\S*),(\S*),(\S*),(\S*),(\S*) s (\S*),(\S*),(\S*),(\S*),(\S*),(\S*) e', decoded_bytes_data_line)[0]
+            #regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line[:-2])[0]
 
-        ser_bytes = self.main_mover.readline()
-        decoded_bytes = ser_bytes.decode()
+            m_raw_x = float(regex_search[0]) / DATA_DIVIDER
+            m_raw_y = float(regex_search[1]) / DATA_DIVIDER
+            m_raw_z = float(regex_search[2]) / DATA_DIVIDER
 
-        while re.match(search_string, decoded_bytes) is None:
-            print("Waiting for data")
-            ser_bytes = self.main_mover.readline()
-            decoded_bytes = ser_bytes.decode()
-        else:
-            try:
-                ser_bytes_data_line = self.main_mover.readline()
-                decoded_bytes_data_line = ser_bytes_data_line.decode()
-                regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line[:-2])[0]
+            s_raw_x = float(regex_search[6]) / DATA_DIVIDER
+            s_raw_y = float(regex_search[7]) / DATA_DIVIDER
+            s_raw_z = float(regex_search[8]) / DATA_DIVIDER
 
-                raw_x = float(regex_search[0]) / DATA_DIVIDER
-                raw_y = float(regex_search[1]) / DATA_DIVIDER
-                raw_z = float(regex_search[2]) / DATA_DIVIDER
+            self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
+            self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
 
-
-                if len(self.raw_values_x) > 15:
-                    self.raw_values_x.pop()
-                    self.raw_values_y.pop()
-                    self.raw_values_z.pop()
-
-                self.raw_values_x.append(raw_x)
-                self.raw_values_y.append(raw_y)
-                self.raw_values_z.append(raw_z)
-
-                try:
-                    x_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_x)
-                    y_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_y)
-                    z_filtered = sm.signal.filter_signal(self.b, self.a, signal=self.raw_values_z)
-
-                    if len(self.acc_values) > 1:
-                        self.acc_values.pop()       # todo fix this
-
-                    self.acc_values.append([x_filtered[0], y_filtered[0], z_filtered[0]])
-                except ValueError:
-                    pass
-
-            except Exception as e:
-                print(e)
+        except (ValueError, IndexError) as e:
+            pass
+            #print(decoded_bytes_data_line)
 
     def loop(self):
+
+        # Around 0.11 seconds to make a full loop
         while self.should_run_thread:
             try:
 
@@ -183,38 +158,28 @@ class MoverReceiver:
                     time.sleep(3)
                     self.re_init_movers()
 
-               # if len(self.main_prediction_list) > MAX_LEN_PREDICTION_LIST or len(
-                #        self.slave_prediction_list) > MAX_LEN_PREDICTION_LIST:
-                    # Guess movement
-                    #main_prediction = Counter(self.main_prediction_list).most_common(1)[0][0]
-                    #slave_prediction = Counter(self.slave_prediction_list).most_common(1)[0][0]
-
-
-                    #self.main_prediction_list = list()
-                    #self.slave_prediction_list = list()
-
                 # Resets lists
                 self.acc_values = list()
-                self.read_decode_data('main')
-                self.read_decode_data('slave')
+                #print(self.main_mover.readline())
+                self.read_decode_data()
+
+                if len(self.acc_values) == 0:
+                    continue
 
                 try:
                     # Predict type of movement
                     self.doing_prediction = True
                     self.predictions = self.knn.predict(self.acc_values)
                     self.doing_prediction = False
-
                     self.controller.set_analog(self.predictions)
-                    #self.main_prediction_list.append(self.predictions[0])
-                    #self.slave_prediction_list.append(self.predictions[1])
 
                     if DEBUG:
                         print(self.predictions)
                         print(self.acc_values)
                         print('--------------------')
 
-                except (ValueError, IndexError):
-                    pass
+                except (ValueError, IndexError) as e:
+                    print(e)
 
             except SerialException:
                 print("Mover disconnected! Retrying initialization")
@@ -223,8 +188,6 @@ class MoverReceiver:
                 while self.main_mover is None or self.slave_mover is None:
                     self.init_movers()
                 self.reset_mov = True
-
-    # External variables
 
     def startup_threaded_loop(self):
 
@@ -255,8 +218,6 @@ class MoverReceiver:
         return self.acc_values
 
 
-
-
 class GUI:
 
     def __init__(self, mover):
@@ -272,9 +233,6 @@ class GUI:
 
         self.main_frame = tk.Frame(self.window, relief=tk.RAISED)
         self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        #self.main_label = tk.Label(self.main_frame, text="Main operations")
-        #self.main_label.pack(side=tk.TOP, anchor=tk.NW)
 
         self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
         self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
@@ -292,9 +250,6 @@ class GUI:
         self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.controller_label = tk.Label(self.controller_frame, text="")
         self.controller_label.pack()
-
-
-        #get_y_axis
 
         self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
         self.label_frame_main.config(bg='white')
@@ -336,7 +291,6 @@ class GUI:
         self.window.mainloop()
 
     def update_values(self):
-
 
         if self.mover.should_run_thread:
             self.start_button.config(fg='red')
@@ -392,14 +346,19 @@ class GUI:
             self.prediction_label_m['text'] = preds[0]
             self.prediction_label_s['text'] = preds[1]
         except (IndexError, TypeError):
-            print("Error during prediction printing")
+            pass
+            #print("Error during prediction printing")
 
-        self.main_frame.after(1, self.update_values)
+        self.prediction_label_main.after(1000, self.update_values)
 
-
+########################################################################################
 # Startup
 
+
 mov = MoverReceiver()
-#mov.should_run_thread = True
-#mov.loop()
 gui = GUI(mov)
+
+
+
+
+
