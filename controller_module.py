@@ -22,7 +22,7 @@ WALKING_INCREMENT = 0.1
 WALKING_DECREASE = 0.005
 WALKING_TOP = 0.2
 
-STOPPED_DECREMENT = 0.1        # needs some sort of weightning system
+STOPPED_DECREMENT = 0.01        # needs some sort of weightning system
 STOPPED_MIN = 0.05
 
 

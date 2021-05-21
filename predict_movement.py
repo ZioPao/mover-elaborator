@@ -17,12 +17,11 @@ import time
 # what if I "fixed" the current dataset with my values?
 
 headers = ['activity', 'x-accel', 'y-accel', 'z-accel']
-df_t = pd.read_csv('new_dataset.csv', names=headers, low_memory=False)
+df_t = pd.read_csv('new_dataset2.csv', names=headers, low_memory=False)
 
-#df_new_X = pd.DataFrame(new_X, columns=['activity', 'x-accel', 'y-accel', 'z-accel'])
+#df_new_X = pd.DataFrame(added_values[2:], columns=['activity', 'x-accel', 'y-accel', 'z-accel'])
 #new_df = pd.concat([df_t, df_new_X])
 #new_df.to_csv('new_dataset.csv')
-
 
 
 
@@ -67,7 +66,7 @@ y_train = y_train.astype(float)
 print("Training....")
 knn.fit(X_train, y_train)
 print("Finished training")
-pickle.dump(knn, open('trained_models/model3.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model4.bin', 'wb'))
 #loaded_model = pickle.load(open('model.bin', 'rb'))
 
 test = knn.predict(X_test)

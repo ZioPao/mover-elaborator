@@ -18,7 +18,7 @@ from controller_module import Controller
 
 
 # Miscellaneous
-DATA_DIVIDER = 100
+DATA_DIVIDER = 500
 MAX_LEN_PREDICTION_LIST = 4
 
 DEBUG = 1
@@ -42,7 +42,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model3.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model4.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -123,6 +123,10 @@ class MoverReceiver:
 
     def read_decode_data(self):
         try:
+
+            self.main_mover.flushInput()
+            self.slave_mover.flushInput()
+
             ser_bytes_data_line_main = self.main_mover.readline()
             ser_bytes_data_line_slave = self.slave_mover.readline()
 
@@ -353,7 +357,7 @@ class GUI:
             pass
             #print("Error during prediction printing")
 
-        self.prediction_label_main.after(1000, self.update_values)
+        self.prediction_label_main.after(1, self.update_values)
 
 ########################################################################################
 # Startup
