@@ -123,27 +123,16 @@ class MoverReceiver:
 
     def read_decode_data(self):
         try:
+            data = self.main_mover.readline()
+            ser_bytes_data_line = data.decode()
+            regex_search = re.findall('(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', ser_bytes_data_line[:-2])[0]
 
-            self.main_mover.flushInput()
-            self.slave_mover.flushInput()
-
-            ser_bytes_data_line_main = self.main_mover.readline()
-            ser_bytes_data_line_slave = self.slave_mover.readline()
-
-            ser_bytes_data_line_main = ser_bytes_data_line_main.decode()
-            ser_bytes_data_line_slave = ser_bytes_data_line_slave.decode()
-
-            regex_search_main = re.findall('(\S*),(\S*),(\S*),', ser_bytes_data_line_main)[0]
-            regex_search_slave = re.findall('(\S*),(\S*),(\S*),', ser_bytes_data_line_slave)[0]
-
-            #regex_search = re.findall("(\S*),(\S*),(\S*),(\S*),(\S*),(\S*)", decoded_bytes_data_line[:-2])[0]
-
-            m_raw_x = float(regex_search_main[0]) / DATA_DIVIDER
-            m_raw_y = float(regex_search_main[1]) / DATA_DIVIDER
-            m_raw_z = float(regex_search_main[2]) / DATA_DIVIDER
-            s_raw_x = float(regex_search_slave[0]) / DATA_DIVIDER
-            s_raw_y = float(regex_search_slave[1]) / DATA_DIVIDER
-            s_raw_z = float(regex_search_slave[2]) / DATA_DIVIDER
+            m_raw_x = float(regex_search[0]) / DATA_DIVIDER
+            m_raw_y = float(regex_search[1]) / DATA_DIVIDER
+            m_raw_z = float(regex_search[2]) / DATA_DIVIDER
+            s_raw_x = float(regex_search[3]) / DATA_DIVIDER
+            s_raw_y = float(regex_search[4]) / DATA_DIVIDER
+            s_raw_z = float(regex_search[5]) / DATA_DIVIDER
 
             self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
             self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
@@ -168,7 +157,6 @@ class MoverReceiver:
 
                 # Resets lists
                 self.acc_values = list()
-                #print(self.main_mover.readline())
                 self.read_decode_data()
 
                 if len(self.acc_values) == 0:
