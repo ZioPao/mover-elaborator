@@ -39,7 +39,12 @@ class MoverReceiver:
 
         self.id_master = 0
         self.id_slave = 0
-        self.main_mover, self.slave_mover = self.init_movers()
+
+        self.main_mover = None
+        self.slave_mover = None
+
+        while self.main_mover is None or self.slave_mover is None:
+            self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
         self.knn = pickle.load(open('trained_models/model4.bin', 'rb'))     # Loading prediction model

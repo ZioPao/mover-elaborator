@@ -22,12 +22,9 @@ WALKING_INCREMENT = 0.1
 WALKING_DECREASE = 0.005
 WALKING_TOP = 0.2
 
-STOPPED_DECREMENT = 0.01        # needs some sort of weightning system
+STOPPED_DECREMENT = 0.05        # todo needs some sort of weightning system
 STOPPED_MIN = 0.05
-
-
-STOPPED_RANGE = 0.15
-#UPSTAIRS_INCREMENT = ..
+STOPPED_RANGE = 0.05
 
 
 class Controller:
@@ -35,27 +32,18 @@ class Controller:
     def __init__(self):
         # Setup virtual controller
         self.controller = pyxinput.vController()
-        #self.data_reading = pyxinput.rController(1)     # we cannot read back the analog stick values normally
-
-        self.analog_values = {'old': [0, 0], 'current': [0, 0]}
+        self.analog_values = {'old': 0, 'current': 0}
         self.prev_prediction = None
 
     def get_new_analog_values(self, increment, decrease, top_value, ):
-        if self.analog_values[OLD_ANALOG_KEY][1] < top_value:
-            #self.analog_values[OLD_ANALOG_KEY][0] < top_value and \
-
-
-            #new_x_value = self.analog_values[OLD_ANALOG_KEY][0] + increment
-            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] + increment
+        if self.analog_values[OLD_ANALOG_KEY] < top_value:
+            new_y_value = self.analog_values[OLD_ANALOG_KEY] + increment
         else:
-            #new_x_value = self.analog_values[OLD_ANALOG_KEY][0]
-            new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - decrease     # decreases
+            new_y_value = self.analog_values[OLD_ANALOG_KEY] - decrease
 
-        new_x_value = 0     # delete me
-        return new_x_value, new_y_value
+        return new_y_value
 
     def set_analog(self, preds):
-
 
         # if there is only one 3, then we have to ignore it and choose the latter
 
@@ -85,49 +73,41 @@ class Controller:
 
     def choose_prediction(self, prediction):
         # todo better if ints and not floats
-
-        # todo fix this, just for test
-        new_x_value = 0
         new_y_value = 0
 
         if prediction == 0.:
             # jogging
-            new_x_value, new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP)
+            new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP)
         if prediction == 1.:
             # walking
-            new_x_value, new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_DECREASE, WALKING_TOP)
+            new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_DECREASE, WALKING_TOP)
         if prediction == 2.:
             # upstairs
+            new_y_value = self.analog_values[OLD_ANALOG_KEY]
+            # should be jumping
+
             pass
         if prediction == 3.:
             # stopped
-
-            if -0.1 < self.analog_values[OLD_ANALOG_KEY][1] < STOPPED_RANGE:
-                new_x_value = 0
+            if -0.1 < self.analog_values[OLD_ANALOG_KEY] < STOPPED_RANGE:
                 new_y_value = 0
             else:
-                new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - STOPPED_DECREMENT
-
+                new_y_value = self.analog_values[OLD_ANALOG_KEY] - STOPPED_DECREMENT
 
         # check overflow
-
         if new_y_value > 1.:
             new_y_value = 1.        # cap it off to max value
 
-
-
-        if DEBUG:
-            print("Pred -> " + str(prediction))
-            #print("Old X ->" + str(self.analog_values[OLD_ANALOG_KEY][0]))
-            print("Old Y -> " + str(f'{self.analog_values[OLD_ANALOG_KEY][1]:.2f}'))
-            #print("New X ->" + str(new_x_value))
-            print("New Y -> " + str(f'{new_y_value:.2f}'))
-            print("___________________________")
-        #self.controller.set_value(LEFT_AXIS_X, new_x_value)
         self.controller.set_value(LEFT_AXIS_Y, new_y_value)
         # back them up
         self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
-        self.analog_values[CURR_ANALOG_KEY] = [new_x_value, new_y_value]
+        self.analog_values[CURR_ANALOG_KEY] = new_y_value
+
+        if DEBUG:
+            print("Pred -> " + str(prediction))
+            print("Old Y -> " + str(f'{self.analog_values[OLD_ANALOG_KEY]:.2f}'))
+            print("New Y -> " + str(f'{self.analog_values[CURR_ANALOG_KEY]:.2f}'))
+            print("___________________________")
 
     def get_y_axis(self):
-        return self.analog_values[CURR_ANALOG_KEY][1]
+        return self.analog_values[CURR_ANALOG_KEY]
