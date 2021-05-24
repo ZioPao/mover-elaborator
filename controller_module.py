@@ -1,7 +1,7 @@
 import pyxinput
 
 #####################
-DEBUG = 0
+DEBUG = 1
 #####################
 
 LEFT_AXIS_X = 'AxisLx'
@@ -108,14 +108,21 @@ class Controller:
             else:
                 new_y_value = self.analog_values[OLD_ANALOG_KEY][1] - STOPPED_DECREMENT
 
+
+        # check overflow
+
+        if new_y_value > 1.:
+            new_y_value = 1.        # cap it off to max value
+
+
+
         if DEBUG:
             print("Pred -> " + str(prediction))
             #print("Old X ->" + str(self.analog_values[OLD_ANALOG_KEY][0]))
-            print("Old Y -> " + str(self.analog_values[OLD_ANALOG_KEY][1]))
+            print("Old Y -> " + str(f'{self.analog_values[OLD_ANALOG_KEY][1]:.2f}'))
             #print("New X ->" + str(new_x_value))
-            print("New Y -> " + str(new_y_value))
+            print("New Y -> " + str(f'{new_y_value:.2f}'))
             print("___________________________")
-
         #self.controller.set_value(LEFT_AXIS_X, new_x_value)
         self.controller.set_value(LEFT_AXIS_Y, new_y_value)
         # back them up

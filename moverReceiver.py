@@ -21,7 +21,7 @@ from controller_module import Controller
 DATA_DIVIDER = 500
 MAX_LEN_PREDICTION_LIST = 4
 
-DEBUG = 1
+DEBUG = 0
 
 ########################################################################################
 
@@ -123,6 +123,9 @@ class MoverReceiver:
 
     def read_decode_data(self):
         try:
+
+            self.main_mover.flushInput()
+
             data = self.main_mover.readline()
             ser_bytes_data_line = data.decode()
             regex_search = re.findall('(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', ser_bytes_data_line[:-2])[0]
