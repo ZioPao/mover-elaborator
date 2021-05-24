@@ -6,7 +6,7 @@ import re
 import pickle
 import threading
 import sensormotion as sm
-
+import configparser
 from controller_module import Controller
 
 
@@ -19,8 +19,6 @@ from controller_module import Controller
 
 # Miscellaneous
 DATA_DIVIDER = 500
-MAX_LEN_PREDICTION_LIST = 4
-
 DEBUG = 0
 
 ########################################################################################
@@ -30,8 +28,6 @@ class MoverReceiver:
 
     def __init__(self):
 
-        self.b, self.a = sm.signal.build_filter(frequency=10, sample_rate=100, filter_type='low',  filter_order=4)
-
         # One time setup
         self.thread = None
         self.reset_mov = False
@@ -40,11 +36,7 @@ class MoverReceiver:
         self.id_master = 0
         self.id_slave = 0
 
-        self.main_mover = None
-        self.slave_mover = None
-
-        while self.main_mover is None or self.slave_mover is None:
-            self.main_mover, self.slave_mover = self.init_movers()
+        self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
         self.knn = pickle.load(open('trained_models/model4.bin', 'rb'))     # Loading prediction model
@@ -228,6 +220,7 @@ class GUI:
 
         # Setup GUI
         self.mover = mover
+        self.config_window = None
 
         self.window = tk.Tk()
         self.window.iconbitmap(r'favicon.ico')
@@ -248,6 +241,10 @@ class GUI:
         self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: self.mover.set_reset_mov(True))
         self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
         self.reset_button.config(fg='black')
+
+        self.config_button = tk.Button(self.main_frame, text='Config', command=lambda: self.open_config_window())
+        self.config_button.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.N)
+        self.config_button.config(fg='black')
 
         # Controller related stuff
         self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
@@ -355,6 +352,35 @@ class GUI:
 
         self.prediction_label_main.after(1, self.update_values)
 
+    def open_config_window(self):
+
+        if self.config_window is None or self.config_window.winfo_exists() is 0:
+            config = configparser.ConfigParser()
+            config.read('settings.ini')
+            self.config_window = tk.Toplevel(self.window)
+            self.config_window.iconbitmap(r'favicon.ico')
+            self.config_window.minsize(250, 100)
+            self.config_window.maxsize(250, 100)
+            self.config_window.title("Config")
+
+            # Data divider
+            tk.Label(self.config_window, text="Divider: ").grid(row=0)
+            e1 = tk.Entry(self.config_window)
+            e1.grid(row=0, column=1)
+            e1.insert(tk.END, int(config['Data']['data_divider']))
+
+            # should close and set ini
+            tk.Button(self.config_window, text='OK', command=lambda:self.save_settings(config, e1)).grid(row=2,column=1)
+
+    def save_settings(self, config, e1):
+
+        config['Data']['data_divider'] = e1.get()
+
+        with open('settings.ini', 'w') as configfile:  # save
+            config.write(configfile)
+
+        self.config_window.destroy()
+        pass
 ########################################################################################
 # Startup
 
