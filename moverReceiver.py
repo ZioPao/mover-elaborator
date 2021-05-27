@@ -5,23 +5,8 @@ import tkinter as tk
 import re
 import pickle
 import threading
-import sensormotion as sm
-import configparser
 from controller_module import Controller
-
-
-# MAPPING
-# 0 = Jogging
-# 1 = Walking
-# 2 = Upstairs (Maybe reusable for jumping?)
-# 3 = Stopped
-
-
-# Miscellaneous
-DATA_DIVIDER = 500
-DEBUG = 0
-
-########################################################################################
+from config import *
 
 
 class MoverReceiver:
@@ -39,7 +24,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model4.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model7.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -127,12 +112,13 @@ class MoverReceiver:
             ser_bytes_data_line = data.decode()
             regex_search = re.findall('(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', ser_bytes_data_line[:-2])[0]
 
-            m_raw_x = float(regex_search[0]) / DATA_DIVIDER
-            m_raw_y = float(regex_search[1]) / DATA_DIVIDER
-            m_raw_z = float(regex_search[2]) / DATA_DIVIDER
-            s_raw_x = float(regex_search[3]) / DATA_DIVIDER
-            s_raw_y = float(regex_search[4]) / DATA_DIVIDER
-            s_raw_z = float(regex_search[5]) / DATA_DIVIDER
+            z_offset = 8000
+            m_raw_x = float(regex_search[0]) / data_divider
+            m_raw_y = float(regex_search[1]) / data_divider
+            m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
+            s_raw_x = float(regex_search[3]) / data_divider
+            s_raw_y = float(regex_search[4]) / data_divider
+            s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
 
             self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
             self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
@@ -169,7 +155,7 @@ class MoverReceiver:
                     self.doing_prediction = False
                     self.controller.set_analog(self.predictions)
 
-                    if DEBUG:
+                    if debug_printing_receiver:
                         print(self.predictions)
                         print(self.acc_values)
                         print('--------------------')
@@ -353,28 +339,38 @@ class GUI:
         self.prediction_label_main.after(1, self.update_values)
 
     def open_config_window(self):
+        global config
 
         if self.config_window is None or self.config_window.winfo_exists() is 0:
-            config = configparser.ConfigParser()
-            config.read('settings.ini')
+
             self.config_window = tk.Toplevel(self.window)
             self.config_window.iconbitmap(r'favicon.ico')
-            self.config_window.minsize(250, 100)
-            self.config_window.maxsize(250, 100)
+            self.config_window.minsize(250, 150)
+            self.config_window.maxsize(250, 150)
             self.config_window.title("Config")
 
             # Data divider
-            tk.Label(self.config_window, text="Divider: ").grid(row=0)
+            tk.Label(self.config_window, text="Divider: ").grid(row=0, sticky=tk.W)
             e1 = tk.Entry(self.config_window)
-            e1.grid(row=0, column=1)
             e1.insert(tk.END, int(config['Data']['data_divider']))
+            e1.grid(row=0, column=1)
 
+            # Debug
+            chk_d_r = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
+            tk.Checkbutton(self.config_window, text='Debug Receiver',
+                           variable=chk_d_r, onvalue=1, offvalue=0).grid(row=2, sticky=tk.W, pady=(10,2))
+
+            chk_d_c = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
+            tk.Checkbutton(self.config_window, text='Debug Virtual Controller',
+                           variable=chk_d_c, onvalue=1, offvalue=0).grid(row=3, sticky=tk.W)
             # should close and set ini
-            tk.Button(self.config_window, text='OK', command=lambda:self.save_settings(config, e1)).grid(row=2,column=1)
+            tk.Button(self.config_window, text='OK',
+                      command=lambda: self.save_settings(e1, chk_d_r)).grid(row=4, column=1, pady=(10, 2))
 
-    def save_settings(self, config, e1):
+    def save_settings(self, e1, c1):
 
         config['Data']['data_divider'] = e1.get()
+        config['Debug']['debug_printing_receiver'] = str(c1.get())
 
         with open('settings.ini', 'w') as configfile:  # save
             config.write(configfile)
@@ -386,6 +382,7 @@ class GUI:
 
 
 mov = MoverReceiver()
+
 gui = GUI(mov)
 
 

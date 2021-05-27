@@ -1,30 +1,11 @@
 import pyxinput
-
-#####################
-DEBUG = 1
-#####################
+from config import *
 
 LEFT_AXIS_X = 'AxisLx'
 LEFT_AXIS_Y = 'AxisLy'
 
 OLD_ANALOG_KEY = 'old'
 CURR_ANALOG_KEY = 'current'
-
-# 0 = Jogging
-# 1 = Walking
-# 2 = Upstairs (Maybe reusable for jumping?)
-# 3 = Stopped
-JOGGING_INCREMENT = 0.1
-JOGGING_DECREASE = 0.015
-JOGGING_TOP = 1
-
-WALKING_INCREMENT = 0.1
-WALKING_DECREASE = 0.005
-WALKING_TOP = 0.2
-
-STOPPED_DECREMENT = 0.05        # todo needs some sort of weightning system
-STOPPED_MIN = 0.05
-STOPPED_RANGE = 0.05
 
 
 class Controller:
@@ -51,14 +32,14 @@ class Controller:
             first_prediction = preds[0]
             second_prediction = preds[1]
 
-            if first_prediction == 3. and second_prediction == 3.:
-                self.choose_prediction(3.)
+            if first_prediction == 0. and second_prediction == 0.:
+                self.choose_prediction(0.)
 
             else:
                 # only one is stopped
-                if (first_prediction == 3.) ^ (second_prediction == 3.):
+                if (first_prediction == 0.) ^ (second_prediction == 0.):
 
-                    if first_prediction == 3.:
+                    if first_prediction == 0.:
                         self.choose_prediction(second_prediction)
                     else:
                         self.choose_prediction(first_prediction)
@@ -74,25 +55,25 @@ class Controller:
     def choose_prediction(self, prediction):
         # todo better if ints and not floats
         new_y_value = 0
-
         if prediction == 0.:
-            # jogging
-            new_y_value = self.get_new_analog_values(JOGGING_INCREMENT, JOGGING_DECREASE, JOGGING_TOP)
+            # stopped
+            if -0.1 < self.analog_values[OLD_ANALOG_KEY] < stopped_range:
+                new_y_value = 0
+            else:
+                new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
         if prediction == 1.:
             # walking
-            new_y_value = self.get_new_analog_values(WALKING_INCREMENT, WALKING_DECREASE, WALKING_TOP)
+            new_y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
         if prediction == 2.:
             # upstairs
             new_y_value = self.analog_values[OLD_ANALOG_KEY]
             # should be jumping
 
-            pass
         if prediction == 3.:
-            # stopped
-            if -0.1 < self.analog_values[OLD_ANALOG_KEY] < STOPPED_RANGE:
-                new_y_value = 0
-            else:
-                new_y_value = self.analog_values[OLD_ANALOG_KEY] - STOPPED_DECREMENT
+            # jogging
+            new_y_value = self.get_new_analog_values(jogging_increment, jogging_decrement, jogging_top)
+
+            pass
 
         # check overflow
         if new_y_value > 1.:
@@ -103,7 +84,7 @@ class Controller:
         self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
         self.analog_values[CURR_ANALOG_KEY] = new_y_value
 
-        if DEBUG:
+        if debug_printing_controller:
             print("Pred -> " + str(prediction))
             print("Old Y -> " + str(f'{self.analog_values[OLD_ANALOG_KEY]:.2f}'))
             print("New Y -> " + str(f'{self.analog_values[CURR_ANALOG_KEY]:.2f}'))
