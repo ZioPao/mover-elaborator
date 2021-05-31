@@ -24,17 +24,21 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model7.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model8.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
 
         self.predictions = [-1, -1]
         self.acc_values = [[-1, -1, -1], [-1, -1, -1]]
+        self.gyr_values = list()
 
         self.raw_values_x = list()
         self.raw_values_y = list()
         self.raw_values_z = list()
+
+
+        #self.values_prediction_test = list()
 
         self.doing_prediction = False
 
@@ -108,11 +112,15 @@ class MoverReceiver:
 
             self.main_mover.flushInput()
 
-            data = self.main_mover.readline()
-            ser_bytes_data_line = data.decode()
-            regex_search = re.findall('(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', ser_bytes_data_line[:-2])[0]
+            acc_line = self.main_mover.readline()
+            gyr_line = self.main_mover.readline()
 
-            z_offset = 8000
+            decoded_acc_line = acc_line.decode()
+            decoded_gyr_line = gyr_line.decode()
+
+            regex_search = re.findall('a,(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', decoded_acc_line[:-2])[0]
+
+            z_offset = 8000     # todo fix
             m_raw_x = float(regex_search[0]) / data_divider
             m_raw_y = float(regex_search[1]) / data_divider
             m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
@@ -123,9 +131,20 @@ class MoverReceiver:
             self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
             self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
 
+            regex_search = re.findall('g,(\S*),(\S*),(\S*),(\S*),', decoded_gyr_line[:-2])[0]
+            m_gyr_y = float(regex_search[0])
+            m_gyr_z = float(regex_search[1])
+            s_gyr_y = float(regex_search[2])
+            s_gyr_z = float(regex_search[3])
+
+            self.gyr_values.append([m_gyr_y, m_gyr_z])
+            self.gyr_values.append([s_gyr_y, s_gyr_z])
+
+            #self.values_prediction_test.append([2., m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
+            #self.values_prediction_test.append([2., s_raw_x, s_raw_y, s_raw_z, s_gyr_y, s_gyr_z])
+
         except (ValueError, IndexError) as e:
-            pass
-            #print(decoded_bytes_data_line)
+            self.main_mover.flushInput()
 
     def loop(self):
 
@@ -143,6 +162,7 @@ class MoverReceiver:
 
                 # Resets lists
                 self.acc_values = list()
+                self.gyr_values = list()
                 self.read_decode_data()
 
                 if len(self.acc_values) == 0:

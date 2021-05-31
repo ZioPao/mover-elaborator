@@ -54,28 +54,34 @@ class Controller:
 
     def choose_prediction(self, prediction):
         # todo better if ints and not floats
+
+
+        # at least 2 same prediction in a row to do something.
         new_y_value = 0
-        if prediction == 0.:
-            # stopped
-            if -0.1 < self.analog_values[OLD_ANALOG_KEY] < stopped_range:
-                new_y_value = 0
-            else:
-                new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
-        if prediction == 1.:
-            # walking
-            new_y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
-        if prediction == 2.:
-            # upstairs
-            new_y_value = self.analog_values[OLD_ANALOG_KEY]
-            # should be jumping
 
-        if prediction == 3.:
-            # jogging
-            new_y_value = self.get_new_analog_values(jogging_increment, jogging_decrement, jogging_top)
+        if prediction == self.prev_prediction:
 
-            pass
+            if prediction == 0.:
+                # stopped
+                if -0.1 < self.analog_values[OLD_ANALOG_KEY] < stopped_range:
+                    new_y_value = 0
+                else:
+                    new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
+            if prediction == 1.:
+                # walking
+                new_y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
+            if prediction == 2.:
+                # jogging
+                new_y_value = self.get_new_analog_values(jogging_increment, jogging_decrement, jogging_top)
 
-        # check overflow
+                pass
+        else:
+            new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
+
+        # check overflow and underflow
+        if new_y_value < 0.:
+            new_y_value = 0.
+
         if new_y_value > 1.:
             new_y_value = 1.        # cap it off to max value
 
@@ -83,6 +89,7 @@ class Controller:
         # back them up
         self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
         self.analog_values[CURR_ANALOG_KEY] = new_y_value
+        self.prev_prediction = prediction       # salves old prediction
 
         if debug_printing_controller:
             print("Pred -> " + str(prediction))

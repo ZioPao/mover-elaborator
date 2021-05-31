@@ -15,9 +15,10 @@ from sklearn.neighbors import RadiusNeighborsClassifier
 import time
 
 # what if I "fixed" the current dataset with my values?
+headers = ['activity', 'x-accel', 'y-accel', 'z-accel', 'y-gyr', 'z-gyr']
 
-headers = ['activity', 'x-accel', 'y-accel', 'z-accel']
-df_t = pd.read_csv('dataset_test_f.csv', names=headers, low_memory=False)
+#headers = ['activity', 'x-accel', 'y-accel', 'z-accel']
+df_t = pd.read_csv('dataset_test_f3.csv', names=headers, low_memory=False)
 
 #df_new_X = pd.DataFrame(added_values, columns=['activity', 'x-accel', 'y-accel', 'z-accel'])
 #new_df = pd.concat([df_t, df_new_X])
@@ -66,7 +67,7 @@ y_train = y_train.astype(float)
 print("Training....")
 knn.fit(X_train, y_train)
 print("Finished training")
-pickle.dump(knn, open('trained_models/model7.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model8.bin', 'wb'))
 #loaded_model = pickle.load(open('model.bin', 'rb'))
 
 test = knn.predict(X_test)
@@ -77,9 +78,8 @@ print(X_test)
 print("trained y_TEST")
 print(y_test)
 
-
-
-#df_1 = pd.DataFrame(added_values, columns=['activity', 'x-accel', 'y-accel', 'z-accel'])
+new_header = ['activity', 'x-accel', 'y-accel', 'z-accel', 'y-gyr', 'z-gyr']
+#df_1 = pd.DataFrame(added_values, columns=['activity', 'x-accel', 'y-accel', 'z-accel', 'y-gyr', 'z-gyr'])
 #df_1.to_csv('dataset_2.csv')
 
 
