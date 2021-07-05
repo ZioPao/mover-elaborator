@@ -24,7 +24,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model8.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model9.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -38,7 +38,7 @@ class MoverReceiver:
         self.raw_values_z = list()
 
 
-        #self.values_prediction_test = list()
+        self.values_prediction_test = list()
 
         self.doing_prediction = False
 
@@ -118,30 +118,33 @@ class MoverReceiver:
             decoded_acc_line = acc_line.decode()
             decoded_gyr_line = gyr_line.decode()
 
-            regex_search = re.findall('a,(\S*),(\S*),(\S*),(\S*),(\S*),(\S*),', decoded_acc_line[:-2])[0]
+            regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
 
             z_offset = 8000     # todo fix
             m_raw_x = float(regex_search[0]) / data_divider
             m_raw_y = float(regex_search[1]) / data_divider
             m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
-            s_raw_x = float(regex_search[3]) / data_divider
-            s_raw_y = float(regex_search[4]) / data_divider
-            s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
+            #s_raw_x = float(regex_search[3]) / data_divider
+            #s_raw_y = float(regex_search[4]) / data_divider
+            #s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
 
             self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
-            self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
+            #self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
 
-            regex_search = re.findall('g,(\S*),(\S*),(\S*),(\S*),', decoded_gyr_line[:-2])[0]
+            regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
             m_gyr_y = float(regex_search[0])
             m_gyr_z = float(regex_search[1])
-            s_gyr_y = float(regex_search[2])
-            s_gyr_z = float(regex_search[3])
+            #s_gyr_y = float(regex_search[2])
+            #s_gyr_z = float(regex_search[3])
+            current_time = float(regex_search[2])
 
-            self.gyr_values.append([m_gyr_y, m_gyr_z])
-            self.gyr_values.append([s_gyr_y, s_gyr_z])
+            #self.gyr_values.append([m_gyr_y, m_gyr_z])
+            #self.gyr_values.append([s_gyr_y, s_gyr_z])
 
-            #self.values_prediction_test.append([2., m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
-            #self.values_prediction_test.append([2., s_raw_x, s_raw_y, s_raw_z, s_gyr_y, s_gyr_z])
+            print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+
+            self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+            #self.values_prediction_test.append([0., s_raw_x, s_raw_y, s_raw_z, s_gyr_y, s_gyr_z])
 
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
@@ -405,7 +408,55 @@ mov = MoverReceiver()
 
 gui = GUI(mov)
 
+pickle.dump(mov.values_prediction_test, open('values_predictions.bin', 'wb'))
+s_time = mov.values_prediction_test[0][5]
+
+prediction_list = []
+temp_list = []
+container_list = [0.0]
 
 
+for p_l in mov.values_prediction_test:
 
+    # clamp to 30 values...?
+    c_time = p_l[5] - s_time
+    if c_time < 1000:
+        temp_val = [p_l[0], p_l[1], p_l[2],
+                          p_l[3], p_l[4]]
+        temp_list.append(temp_val)
+        # add in list
+    else:
+        s_time = p_l[5]
+        print(len(prediction_list))
+        container_list.append(temp_list)
+        prediction_list.append(container_list)
+        container_list = [0.0]       # activity
+        temp_list = []
+        # create new series/array to store stuff and append to the main one
 
+s_time = mov.values_prediction_test[0][5]
+import numpy as np
+
+prediction_list = []
+temp_list = []
+container_list = []
+counter = 1
+for p_l in mov.values_prediction_test:
+
+    # clamp to 30 values...?
+    if counter < 31:
+        temp_val = np.array([p_l[0], p_l[1], p_l[2],
+                    p_l[3], p_l[4]], dtype=float)
+        temp_list.append(temp_val)
+        # add in list
+    else:
+        print(len(prediction_list))
+        #container_list.append(temp_list)
+        prediction_list.append(temp_list)
+        container_list = []  # activity at the start I guess
+        temp_list = []
+        counter = 0
+        # create new series/array to store stuff and append to the main one
+    counter += 1
+
+prediction_list = np.array(prediction_list)
