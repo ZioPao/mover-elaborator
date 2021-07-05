@@ -399,7 +399,7 @@ class GUI:
             config.write(configfile)
 
         self.config_window.destroy()
-        pass
+
 ########################################################################################
 # Startup
 
@@ -407,56 +407,3 @@ class GUI:
 mov = MoverReceiver()
 
 gui = GUI(mov)
-
-pickle.dump(mov.values_prediction_test, open('values_predictions.bin', 'wb'))
-s_time = mov.values_prediction_test[0][5]
-
-prediction_list = []
-temp_list = []
-container_list = [0.0]
-
-
-for p_l in mov.values_prediction_test:
-
-    # clamp to 30 values...?
-    c_time = p_l[5] - s_time
-    if c_time < 1000:
-        temp_val = [p_l[0], p_l[1], p_l[2],
-                          p_l[3], p_l[4]]
-        temp_list.append(temp_val)
-        # add in list
-    else:
-        s_time = p_l[5]
-        print(len(prediction_list))
-        container_list.append(temp_list)
-        prediction_list.append(container_list)
-        container_list = [0.0]       # activity
-        temp_list = []
-        # create new series/array to store stuff and append to the main one
-
-s_time = mov.values_prediction_test[0][5]
-import numpy as np
-
-prediction_list = []
-temp_list = []
-container_list = []
-counter = 1
-for p_l in mov.values_prediction_test:
-
-    # clamp to 30 values...?
-    if counter < 31:
-        temp_val = np.array([p_l[0], p_l[1], p_l[2],
-                    p_l[3], p_l[4]], dtype=float)
-        temp_list.append(temp_val)
-        # add in list
-    else:
-        print(len(prediction_list))
-        #container_list.append(temp_list)
-        prediction_list.append(temp_list)
-        container_list = []  # activity at the start I guess
-        temp_list = []
-        counter = 0
-        # create new series/array to store stuff and append to the main one
-    counter += 1
-
-prediction_list = np.array(prediction_list)
