@@ -1,4 +1,4 @@
-mport numpy as np
+import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 from sklearn.neighbors import KNeighborsClassifier
@@ -55,3 +55,51 @@ print(X_test)
 
 print("trained y_TEST")
 print(y_test)
+
+
+
+
+
+
+
+#####################################################################
+
+# setup for single types of act
+stop_X = pickle.load(open('datasets_to_compile/prediction_list_stop.bin', 'rb'))
+stop_X = np.array(stop_X)
+n_samples, nx, ny = stop_X.shape
+stop_X_r = stop_X.reshape((n_samples, nx*ny))
+stop_y = np.zeros(n_samples)
+
+walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk.bin', 'rb'))
+walk_X = np.array(walk_X)
+n_samples, nx, ny = walk_X.shape
+walk_X_r = walk_X.reshape((n_samples, nx*ny))
+walk_y = np.ones(n_samples)
+
+run_X = #
+...
+
+final_X = np.vstack((stop_X_r, walk_X_r))
+final_y = np.append(stop_y, walk_y)
+
+
+
+# let's mix it up boy
+np.random.seed(0)
+indices = np.random.permutation(len(final_X))
+X_train = final_X[indices[:-10]]
+y_train = final_y[indices[:-10]]
+
+
+X_test = final_X[indices[-10:]]
+y_test = final_y[indices[-10:]]
+
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+pickle.dump(knn, open('trained_models/model10.bin', 'wb'))
+
+# test
+test = knn.predict(X_test)
+

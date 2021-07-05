@@ -69,4 +69,4 @@ for p_l in mov.values_prediction_test:
 prediction_list_np = np.array(prediction_list)
 
 
-pickle.dump(prediction_list, open('values_predictions_mov1.bin', 'wb'))
+pickle.dump(prediction_list, open('datasets_to_compile/prediction_list_stop.bin', 'wb'))

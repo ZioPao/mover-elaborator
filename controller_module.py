@@ -55,7 +55,6 @@ class Controller:
     def choose_prediction(self, prediction):
         # todo better if ints and not floats
 
-
         # at least 2 same prediction in a row to do something.
         new_y_value = 0
 

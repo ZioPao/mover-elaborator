@@ -5,6 +5,7 @@ import tkinter as tk
 import re
 import pickle
 import threading
+import numpy as np
 from controller_module import Controller
 from config import *
 
@@ -24,7 +25,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model9.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model10.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -37,9 +38,7 @@ class MoverReceiver:
         self.raw_values_y = list()
         self.raw_values_z = list()
 
-
         self.values_prediction_test = list()
-
         self.doing_prediction = False
 
     def init_movers(self):
@@ -112,38 +111,42 @@ class MoverReceiver:
 
             self.main_mover.flushInput()
 
-            acc_line = self.main_mover.readline()
-            gyr_line = self.main_mover.readline()
+            # do it for 30 times.... too much?
 
-            decoded_acc_line = acc_line.decode()
-            decoded_gyr_line = gyr_line.decode()
+            while len(self.values_prediction_test) < 30:
 
-            regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
+                acc_line = self.main_mover.readline()
+                gyr_line = self.main_mover.readline()
 
-            z_offset = 8000     # todo fix
-            m_raw_x = float(regex_search[0]) / data_divider
-            m_raw_y = float(regex_search[1]) / data_divider
-            m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
-            #s_raw_x = float(regex_search[3]) / data_divider
-            #s_raw_y = float(regex_search[4]) / data_divider
-            #s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
+                decoded_acc_line = acc_line.decode()
+                decoded_gyr_line = gyr_line.decode()
 
-            self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
-            #self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
+                regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
 
-            regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
-            m_gyr_y = float(regex_search[0])
-            m_gyr_z = float(regex_search[1])
-            #s_gyr_y = float(regex_search[2])
-            #s_gyr_z = float(regex_search[3])
-            current_time = float(regex_search[2])
+                z_offset = 8000     # todo fix
+                m_raw_x = float(regex_search[0]) / data_divider
+                m_raw_y = float(regex_search[1]) / data_divider
+                m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
+                #s_raw_x = float(regex_search[3]) / data_divider
+                #s_raw_y = float(regex_search[4]) / data_divider
+                #s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
 
-            #self.gyr_values.append([m_gyr_y, m_gyr_z])
-            #self.gyr_values.append([s_gyr_y, s_gyr_z])
+                self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
+                #self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
 
-            print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+                regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
+                m_gyr_y = float(regex_search[0])
+                m_gyr_z = float(regex_search[1])
+                #s_gyr_y = float(regex_search[2])
+                #s_gyr_z = float(regex_search[3])
+                current_time = float(regex_search[2])
 
-            self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+                #self.gyr_values.append([m_gyr_y, m_gyr_z])
+                #self.gyr_values.append([s_gyr_y, s_gyr_z])
+
+                #print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+
+                self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
             #self.values_prediction_test.append([0., s_raw_x, s_raw_y, s_raw_z, s_gyr_y, s_gyr_z])
 
         except (ValueError, IndexError) as e:
@@ -174,10 +177,11 @@ class MoverReceiver:
                 try:
                     # Predict type of movement
                     self.doing_prediction = True
-                    self.predictions = self.knn.predict(self.acc_values)
+                    self.predictions = self.knn.predict(np.array(self.values_prediction_test).reshape(1, -1))
+                    self.values_prediction_test = []
                     self.doing_prediction = False
                     self.controller.set_analog(self.predictions)
-
+                    print("Testing")
                     if debug_printing_receiver:
                         print(self.predictions)
                         print(self.acc_values)
@@ -405,5 +409,4 @@ class GUI:
 
 
 mov = MoverReceiver()
-
 gui = GUI(mov)

@@ -18,7 +18,7 @@ data_divider = int(config['Data']['data_divider'])
 
 
 #####################
-debug_printing_controller = config['Debug']['debug_printing_controller']
+debug_printing_controller = bool(config['Debug']['debug_printing_controller'])
 debug_printing_receiver = bool(config['Debug']['debug_printing_receiver'])
 #####################
 
