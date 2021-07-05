@@ -65,13 +65,13 @@ print(y_test)
 #####################################################################
 
 # setup for single types of act
-stop_X = pickle.load(open('datasets_to_compile/prediction_list_stop.bin', 'rb'))
+stop_X = pickle.load(open('datasets_to_compile/prediction_list_stop2.bin', 'rb'))
 stop_X = np.array(stop_X)
 n_samples, nx, ny = stop_X.shape
 stop_X_r = stop_X.reshape((n_samples, nx*ny))
 stop_y = np.zeros(n_samples)
 
-walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk.bin', 'rb'))
+walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk3.bin', 'rb'))
 walk_X = np.array(walk_X)
 n_samples, nx, ny = walk_X.shape
 walk_X_r = walk_X.reshape((n_samples, nx*ny))
@@ -95,10 +95,10 @@ y_train = final_y[indices[:-10]]
 X_test = final_X[indices[-10:]]
 y_test = final_y[indices[-10:]]
 
-
+from sklearn.neighbors import KNeighborsClassifier
 knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train, y_train)
-pickle.dump(knn, open('trained_models/model10.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model11.bin', 'wb'))
 
 # test
 test = knn.predict(X_test)

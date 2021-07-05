@@ -25,7 +25,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model10.bin', 'rb'))     # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model11.bin', 'rb'))     # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -110,9 +110,6 @@ class MoverReceiver:
         try:
 
             self.main_mover.flushInput()
-
-            # do it for 30 times.... too much?
-
             while len(self.values_prediction_test) < 30:
 
                 acc_line = self.main_mover.readline()
@@ -147,7 +144,6 @@ class MoverReceiver:
                 #print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
 
                 self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
-            #self.values_prediction_test.append([0., s_raw_x, s_raw_y, s_raw_z, s_gyr_y, s_gyr_z])
 
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
