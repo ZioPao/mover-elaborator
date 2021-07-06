@@ -18,8 +18,8 @@ data_divider = int(config['Data']['data_divider'])
 
 
 #####################
-debug_printing_controller = bool(config['Debug']['debug_printing_controller'])
-debug_printing_receiver = bool(config['Debug']['debug_printing_receiver'])
+debug_printing_controller = bool(int(config['Debug']['debug_printing_controller']))
+debug_printing_receiver = bool(int(config['Debug']['debug_printing_receiver']))
 #####################
 
 # 0 = Jogging

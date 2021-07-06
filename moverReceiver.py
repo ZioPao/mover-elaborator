@@ -24,8 +24,8 @@ class MoverReceiver:
 
         self.main_mover, self.slave_mover = self.init_movers()
 
-        self.controller = Controller()        # Set the controller
-        self.knn = pickle.load(open('trained_models/model11.bin', 'rb'))     # Loading prediction model
+        self.controller = Controller()  # Set the controller
+        self.knn = pickle.load(open('trained_models/model15.bin', 'rb'))  # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -40,6 +40,7 @@ class MoverReceiver:
 
         self.values_prediction_test = list()
         self.doing_prediction = False
+        self.detected_movement = False
 
     def init_movers(self):
 
@@ -65,13 +66,13 @@ class MoverReceiver:
                     self.id_slave = id_tmp
             except SerialException:
                 pass
-
+            print(id_tmp)
             id_tmp += 1
             if id_tmp > 10:
                 break
 
         if mov_master_tmp and mov_slave_tmp:
-            print("Connected Master: -> COM" + str(self.id_master))
+            print("Connected Master -> COM" + str(self.id_master))
             mov_master_tmp.flushInput()
             print("Connected Slave -> COM" + str(self.id_slave))
             mov_slave_tmp.flushInput()
@@ -107,44 +108,62 @@ class MoverReceiver:
     # Looping stuff
 
     def read_decode_data(self):
+
+        def rdd_base(check=True):
+            is_done = False
+
+            while is_done is False:
+                try:
+                    self.main_mover.flushInput()
+
+                    # first reading. if it's considered "moving", then let's start the window to determine the type of movement
+                    acc_line = self.main_mover.readline()
+                    gyr_line = self.main_mover.readline()
+
+                    decoded_acc_line = acc_line.decode()
+                    decoded_gyr_line = gyr_line.decode()
+
+                    regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
+
+                    z_offset = 8000  # todo fix
+                    m_raw_x = float(regex_search[0]) / data_divider
+                    m_raw_y = float(regex_search[1]) / data_divider
+                    m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
+
+                    self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
+
+                    regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
+                    m_gyr_y = float(regex_search[0])
+                    m_gyr_z = float(regex_search[1])
+
+
+                    # self.gyr_values.append([m_gyr_y, m_gyr_z])
+                    # self.gyr_values.append([s_gyr_y, s_gyr_z])
+
+                    is_done = True
+                    if check is False:
+                        self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
+                        # print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
+
+                    else:
+                        return (abs(m_raw_x) + abs(m_raw_y) + abs(m_raw_z))/3  # as movement test
+
+                except Exception:
+                    pass
+
+
+
         try:
-
-            self.main_mover.flushInput()
-            while len(self.values_prediction_test) < 30:
-
-                acc_line = self.main_mover.readline()
-                gyr_line = self.main_mover.readline()
-
-                decoded_acc_line = acc_line.decode()
-                decoded_gyr_line = gyr_line.decode()
-
-                regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
-
-                z_offset = 8000     # todo fix
-                m_raw_x = float(regex_search[0]) / data_divider
-                m_raw_y = float(regex_search[1]) / data_divider
-                m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
-                #s_raw_x = float(regex_search[3]) / data_divider
-                #s_raw_y = float(regex_search[4]) / data_divider
-                #s_raw_z = float(int(regex_search[5]) - z_offset) / data_divider
-
-                self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
-                #self.acc_values.append([s_raw_x, s_raw_y, s_raw_z])
-
-                regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
-                m_gyr_y = float(regex_search[0])
-                m_gyr_z = float(regex_search[1])
-                #s_gyr_y = float(regex_search[2])
-                #s_gyr_z = float(regex_search[3])
-                current_time = float(regex_search[2])
-
-                #self.gyr_values.append([m_gyr_y, m_gyr_z])
-                #self.gyr_values.append([s_gyr_y, s_gyr_z])
-
-                #print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
-
-                self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
-
+            '''PEAK DETECTION'''
+            mov_test = rdd_base()
+            if mov_test > 0.75:
+                #print("Detected movement!")
+                self.detected_movement = True
+                # start prediction stuff
+                while len(self.values_prediction_test) < 30:
+                    rdd_base(False)
+            else:
+                self.detected_movement = False
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
 
@@ -165,6 +184,7 @@ class MoverReceiver:
                 # Resets lists
                 self.acc_values = list()
                 self.gyr_values = list()
+
                 self.read_decode_data()
 
                 if len(self.acc_values) == 0:
@@ -172,16 +192,17 @@ class MoverReceiver:
 
                 try:
                     # Predict type of movement
-                    self.doing_prediction = True
-                    self.predictions = self.knn.predict(np.array(self.values_prediction_test).reshape(1, -1))
-                    self.values_prediction_test = []
-                    self.doing_prediction = False
-                    self.controller.set_analog(self.predictions)
-                    print("Testing")
-                    if debug_printing_receiver:
-                        print(self.predictions)
-                        print(self.acc_values)
-                        print('--------------------')
+
+                    if self.detected_movement:
+                        self.doing_prediction = True
+                        self.predictions = self.knn.predict(np.array(self.values_prediction_test).reshape(1, -1))
+                        self.values_prediction_test = []
+                        self.doing_prediction = False
+                        self.controller.set_analog(self.predictions)
+                        if debug_printing_receiver:
+                            print(self.predictions)
+                            print(self.acc_values)
+                            print('--------------------')
 
                 except (ValueError, IndexError) as e:
                     print(e)
@@ -197,7 +218,7 @@ class MoverReceiver:
     def startup_threaded_loop(self):
 
         if self.should_run_thread is False:
-            self.should_run_thread = True       # to keep it looping
+            self.should_run_thread = True  # to keep it looping
             self.thread = threading.Thread(target=self.loop, args=()).start()
 
     def stop_currently_running_thread(self):
@@ -205,7 +226,7 @@ class MoverReceiver:
         if self.should_run_thread:
             print("Stopping loop...")
             self.should_run_thread = False
-            self.main_mover.flushInput()        # To stop completely
+            self.main_mover.flushInput()  # To stop completely
         else:
             print("It's not running right now!")
 
@@ -247,7 +268,8 @@ class GUI:
         self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
         self.stop_button.config(fg='black')
 
-        self.reset_button = tk.Button(self.main_frame, text='Reset Movers', command=lambda: self.mover.set_reset_mov(True))
+        self.reset_button = tk.Button(self.main_frame, text='Reset Movers',
+                                      command=lambda: self.mover.set_reset_mov(True))
         self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
         self.reset_button.config(fg='black')
 
@@ -333,7 +355,7 @@ class GUI:
             controller_string = '-------->'
         if 0.8 < controller_values <= 0.9:
             controller_string = '--------->'
-        if 0.9 < controller_values <= 1.5:      # includes a little bit of float error
+        if 0.9 < controller_values <= 1.5:  # includes a little bit of float error
             controller_string = '---------->'
 
         self.controller_label['text'] = controller_string
@@ -357,7 +379,7 @@ class GUI:
             self.prediction_label_s['text'] = preds[1]
         except (IndexError, TypeError):
             pass
-            #print("Error during prediction printing")
+            # print("Error during prediction printing")
 
         self.prediction_label_main.after(1, self.update_values)
 
@@ -365,7 +387,6 @@ class GUI:
         global config
 
         if self.config_window is None or self.config_window.winfo_exists() is 0:
-
             self.config_window = tk.Toplevel(self.window)
             self.config_window.iconbitmap(r'favicon.ico')
             self.config_window.minsize(250, 150)
@@ -381,7 +402,7 @@ class GUI:
             # Debug
             chk_d_r = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
             tk.Checkbutton(self.config_window, text='Debug Receiver',
-                           variable=chk_d_r, onvalue=1, offvalue=0).grid(row=2, sticky=tk.W, pady=(10,2))
+                           variable=chk_d_r, onvalue=1, offvalue=0).grid(row=2, sticky=tk.W, pady=(10, 2))
 
             chk_d_c = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
             tk.Checkbutton(self.config_window, text='Debug Virtual Controller',
@@ -400,9 +421,12 @@ class GUI:
 
         self.config_window.destroy()
 
+
 ########################################################################################
 # Startup
 
 
 mov = MoverReceiver()
 gui = GUI(mov)
+
+# checks if it's actually moving. if it's moving, we have to check the window of around 1 second...

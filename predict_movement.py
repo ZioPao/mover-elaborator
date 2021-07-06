@@ -1,15 +1,4 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import pickle
-from sklearn.neighbors import KNeighborsClassifier
-from mpl_toolkits.mplot3d import Axes3D
-import pandas as pd
-import filterpy
-from sklearn.cluster import KMeans
-from sklearn import svm
-from sklearn.neighbors import NearestCentroid
-from sklearn.neighbors import RadiusNeighborsClassifier
-import time
+
 
 
 # 1) Un movimento deve essere dato da più movimenti... 1 secondo di movimento nel training. Da inserire un delta time nella lista passata da arduino
@@ -63,13 +52,17 @@ print(y_test)
 
 
 #####################################################################
+import numpy as np
+import pickle
+from sklearn.neighbors import KNeighborsClassifier
+
 
 # setup for single types of act
-stop_X = pickle.load(open('datasets_to_compile/prediction_list_stop2.bin', 'rb'))
-stop_X = np.array(stop_X)
-n_samples, nx, ny = stop_X.shape
-stop_X_r = stop_X.reshape((n_samples, nx*ny))
-stop_y = np.zeros(n_samples)
+#stop_X = pickle.load(open('datasets_to_compile/prediction_list_stop5.bin', 'rb'))
+#stop_X = np.array(stop_X)
+#n_samples, nx, ny = stop_X.shape
+#stop_X_r = stop_X.reshape((n_samples, nx*ny))
+#stop_y = np.zeros(n_samples)
 
 walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk3.bin', 'rb'))
 walk_X = np.array(walk_X)
@@ -77,11 +70,14 @@ n_samples, nx, ny = walk_X.shape
 walk_X_r = walk_X.reshape((n_samples, nx*ny))
 walk_y = np.ones(n_samples)
 
-run_X = #
-...
+run_X = pickle.load(open('datasets_to_compile/prediction_list_run1.bin', 'rb'))
+run_X = np.array(run_X)
+n_samples, nx, ny = run_X.shape
+run_X_r = run_X.reshape((n_samples, nx*ny))
+run_y = np.full(n_samples, 2)
 
-final_X = np.vstack((stop_X_r, walk_X_r))
-final_y = np.append(stop_y, walk_y)
+final_X = np.vstack((walk_X_r, run_X_r))
+final_y = np.append(walk_y,run_y )
 
 
 
@@ -95,11 +91,19 @@ y_train = final_y[indices[:-10]]
 X_test = final_X[indices[-10:]]
 y_test = final_y[indices[-10:]]
 
-from sklearn.neighbors import KNeighborsClassifier
 knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train, y_train)
-pickle.dump(knn, open('trained_models/model11.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model15.bin', 'wb'))
 
 # test
 test = knn.predict(X_test)
 
+# when crouching it should count as walking\running
+# not finding correctly when going down while walking
+
+
+
+# HISTORY TEMP
+
+# MODEL 14: non identifica correttamente la corsa. Dai test risulta che ancora la vede come rumore o come stato di quiete
+# MODEL 15: non ci serve lo stato di quiete se lo possiamo determinare in maniera più easy. Evita possibili sbagli e aumenta chacne di sbagliare
