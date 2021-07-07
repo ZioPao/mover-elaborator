@@ -1,57 +1,3 @@
-
-
-
-# 1) Un movimento deve essere dato da più movimenti... 1 secondo di movimento nel training. Da inserire un delta time nella lista passata da arduino
-
-
-
-# what if I "fixed" the current dataset with my values?
-headers = ['activity', 'mov-list']
-
-print("Setting up X")
-X = df_t[]
-
-print("Setting up y")
-
-
-
-n_samples, nx, ny = prediction_list_np.shape
-X_reshaped = prediction_list_np.reshape((n_samples,nx*ny))
-
-y = np.ones(n_samples)
-
-# dopo
-np.random.seed(0)
-indices = np.random.permutation(len(X_reshaped))
-X_train = X_reshaped[indices[:-10]]
-y_train = y[indices[:-10]]
-y_train = y_train.astype(float)
-X_test = X_reshaped[indices[-10:]]
-y_test = y[indices[-10:]]
-
-
-knn = KNeighborsClassifier(n_neighbors=5)
-print("Training....")
-knn.fit(X_train, y_train)
-print("Finished training")
-pickle.dump(knn, open('trained_models/model9.bin', 'wb'))
-#loaded_model = pickle.load(open('model.bin', 'rb'))
-
-test = knn.predict(X_test)
-
-print("trained X_TEST")
-print(X_test)
-
-print("trained y_TEST")
-print(y_test)
-
-
-
-
-
-
-
-#####################################################################
 import numpy as np
 import pickle
 from sklearn.neighbors import KNeighborsClassifier
@@ -64,7 +10,14 @@ from sklearn.neighbors import KNeighborsClassifier
 #stop_X_r = stop_X.reshape((n_samples, nx*ny))
 #stop_y = np.zeros(n_samples)
 
-walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk3.bin', 'rb'))
+walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk4.bin', 'rb'))
+walk_X = np.array(walk_X)
+n_samples, nx, ny = walk_X.shape
+walk_X_r = walk_X.reshape((n_samples, nx*ny))
+walk_y = np.ones(n_samples)
+
+
+walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk4.bin', 'rb'))
 walk_X = np.array(walk_X)
 n_samples, nx, ny = walk_X.shape
 walk_X_r = walk_X.reshape((n_samples, nx*ny))
@@ -77,8 +30,7 @@ run_X_r = run_X.reshape((n_samples, nx*ny))
 run_y = np.full(n_samples, 2)
 
 final_X = np.vstack((walk_X_r, run_X_r))
-final_y = np.append(walk_y,run_y )
-
+final_y = np.append(walk_y, run_y)
 
 
 # let's mix it up boy
@@ -93,7 +45,7 @@ y_test = final_y[indices[-10:]]
 
 knn = KNeighborsClassifier(n_neighbors=5)
 knn.fit(X_train, y_train)
-pickle.dump(knn, open('trained_models/model15.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model16.bin', 'wb'))
 
 # test
 test = knn.predict(X_test)
@@ -102,8 +54,14 @@ test = knn.predict(X_test)
 # not finding correctly when going down while walking
 
 
+# DOCS
+
+# 1) Tra camminata e corsa non c'è vera differenza di movimento, sono molto simili, cambia solo accelerazione
+
 
 # HISTORY TEMP
 
 # MODEL 14: non identifica correttamente la corsa. Dai test risulta che ancora la vede come rumore o come stato di quiete
 # MODEL 15: non ci serve lo stato di quiete se lo possiamo determinare in maniera più easy. Evita possibili sbagli e aumenta chacne di sbagliare
+# MODEL 16: altri test, nulla da segnalare
+# MODEL
