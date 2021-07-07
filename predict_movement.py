@@ -17,11 +17,17 @@ walk_X_r = walk_X.reshape((n_samples, nx*ny))
 walk_y = np.ones(n_samples)
 
 
-walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk4.bin', 'rb'))
-walk_X = np.array(walk_X)
-n_samples, nx, ny = walk_X.shape
-walk_X_r = walk_X.reshape((n_samples, nx*ny))
-walk_y = np.ones(n_samples)
+side_left_X = pickle.load(open('datasets_to_compile/prediction_list_sideLeft.bin', 'rb'))
+side_left_X = np.array(side_left_X)
+n_samples, nx, ny = side_left_X.shape
+side_left_X_r = side_left_X.reshape((n_samples, nx*ny))
+side_left_y = 1
+
+side_right_X = pickle.load(open('datasets_to_compile/prediction_list_sideRight.bin', 'rb'))
+side_right_X = np.array(side_right_X)
+n_samples, nx, ny = side_right_X.shape
+side_right_X_r = side_right_X.reshape((n_samples, nx*ny))
+side_right_y = 1
 
 run_X = pickle.load(open('datasets_to_compile/prediction_list_run1.bin', 'rb'))
 run_X = np.array(run_X)

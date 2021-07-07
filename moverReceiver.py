@@ -22,6 +22,7 @@ class MoverReceiver:
         self.id_master = 0
         self.id_slave = 0
 
+        self.has_connection_been_estabilished = False
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()  # Set the controller
@@ -78,8 +79,11 @@ class MoverReceiver:
             mov_master_tmp.flushInput()
             print("Connected Slave -> COM" + str(self.id_slave))
             mov_slave_tmp.flushInput()
+
+            self.has_connection_been_estabilished = True
         else:
             print("Couldn't find the devices!")
+            self.has_connection_been_estabilished = False
             mov_master_tmp = None
             mov_slave_tmp = None
 
@@ -273,69 +277,73 @@ class GUI:
         self.main_frame = tk.Frame(self.window, relief=tk.RAISED)
         self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
-        self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+        if mover.has_connection_been_estabilished:
+            self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
+            self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
-        self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
-        self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
-        self.stop_button.config(fg='black')
+            self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
+            self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+            self.stop_button.config(fg='black')
 
-        self.reset_button = tk.Button(self.main_frame, text='Reset Movers',
-                                      command=lambda: self.mover.set_reset_mov(True))
-        self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
-        self.reset_button.config(fg='black')
+            self.reset_button = tk.Button(self.main_frame, text='Reset Movers',
+                                          command=lambda: self.mover.set_reset_mov(True))
+            self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+            self.reset_button.config(fg='black')
 
-        self.config_button = tk.Button(self.main_frame, text='Config', command=lambda: self.open_config_window())
-        self.config_button.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.N)
-        self.config_button.config(fg='black')
+            self.config_button = tk.Button(self.main_frame, text='Config', command=lambda: self.open_config_window())
+            self.config_button.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.N)
+            self.config_button.config(fg='black')
 
-        # Controller related stuff
-        self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
-        self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.controller_label = tk.Label(self.controller_frame, text="")
-        self.controller_label.pack()
+            # Controller related stuff
+            self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
+            self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.controller_label = tk.Label(self.controller_frame, text="")
+            self.controller_label.pack()
 
-        self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
-        self.label_frame_main.config(bg='white')
-        self.label_frame_main.pack(fill="both", expand="yes")
+            self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
+            self.label_frame_main.config(bg='white')
+            self.label_frame_main.pack(fill="both", expand="yes")
 
-        self.label_frame_master = tk.LabelFrame(self.label_frame_main)
-        self.label_frame_master.pack(fill="both", expand="yes")
+            self.label_frame_master = tk.LabelFrame(self.label_frame_main)
+            self.label_frame_master.pack(fill="both", expand="yes")
 
-        self.infos_m_label = tk.Label(self.label_frame_master, text='Master -> ')
-        self.infos_m_label.config(bg='white')
-        self.infos_m_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
-        self.infos_m = tk.Label(self.label_frame_master, text="tmp")
-        self.infos_m.config(bg='white')
-        self.infos_m.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+            self.infos_m_label = tk.Label(self.label_frame_master, text='Master -> ')
+            self.infos_m_label.config(bg='white')
+            self.infos_m_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+            self.infos_m = tk.Label(self.label_frame_master, text="tmp")
+            self.infos_m.config(bg='white')
+            self.infos_m.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
 
-        self.label_frame_slave = tk.LabelFrame(self.label_frame_main)
-        self.label_frame_slave.pack(fill="both", expand="yes")
+            self.label_frame_slave = tk.LabelFrame(self.label_frame_main)
+            self.label_frame_slave.pack(fill="both", expand="yes")
 
-        self.infos_s_label = tk.Label(self.label_frame_slave, text='Slave -> ')
-        self.infos_s_label.config(bg='white')
-        self.infos_s_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
-        self.infos_s = tk.Label(self.label_frame_slave, text="tmp")
-        self.infos_s.config(bg='white')
-        self.infos_s.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+            self.infos_s_label = tk.Label(self.label_frame_slave, text='Slave -> ')
+            self.infos_s_label.config(bg='white')
+            self.infos_s_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+            self.infos_s = tk.Label(self.label_frame_slave, text="tmp")
+            self.infos_s.config(bg='white')
+            self.infos_s.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
 
-        self.prediction_frame = tk.Frame(self.window)
-        self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
+            self.prediction_frame = tk.Frame(self.window)
+            self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
 
-        self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
-        self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
-        self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
-        self.prediction_label_main.pack(side=tk.LEFT)
-        self.prediction_label_m.config(fg='red')
-        self.prediction_label_m.pack(side=tk.LEFT)
-        self.prediction_label_s.config(fg='red')
-        self.prediction_label_s.pack(side=tk.LEFT)
+            self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
+            self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_main.pack(side=tk.LEFT)
+            self.prediction_label_m.config(fg='red')
+            self.prediction_label_m.pack(side=tk.LEFT)
+            self.prediction_label_s.config(fg='red')
+            self.prediction_label_s.pack(side=tk.LEFT)
 
-        self.update_values()
+            self.update_values()
+        else:
+            self.retry_button = tk.Button(self.main_frame, text='Retry connection', command=self.retry_connection)
+            self.retry_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+
         self.window.mainloop()
 
     def update_values(self):
-
         if self.mover.should_run_thread:
             self.start_button.config(fg='red')
         else:
@@ -394,6 +402,75 @@ class GUI:
             # print("Error during prediction printing")
 
         self.prediction_label_main.after(1, self.update_values)
+
+    def retry_connection(self):
+        self.mover.main_mover, self.mover.slave_mover = self.mover.init_movers()
+
+        if self.mover.has_connection_been_estabilished:
+
+            self.retry_button.destroy()
+
+            self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
+            self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+
+            self.stop_button = tk.Button(self.main_frame, text='Stop',
+                                         command=self.mover.stop_currently_running_thread)
+            self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+            self.stop_button.config(fg='black')
+
+            self.reset_button = tk.Button(self.main_frame, text='Reset Movers',
+                                          command=lambda: self.mover.set_reset_mov(True))
+            self.reset_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
+            self.reset_button.config(fg='black')
+
+            self.config_button = tk.Button(self.main_frame, text='Config',
+                                           command=lambda: self.open_config_window())
+            self.config_button.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.N)
+            self.config_button.config(fg='black')
+
+            # Controller related stuff
+            self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
+            self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.controller_label = tk.Label(self.controller_frame, text="")
+            self.controller_label.pack()
+
+            self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
+            self.label_frame_main.config(bg='white')
+            self.label_frame_main.pack(fill="both", expand="yes")
+
+            self.label_frame_master = tk.LabelFrame(self.label_frame_main)
+            self.label_frame_master.pack(fill="both", expand="yes")
+
+            self.infos_m_label = tk.Label(self.label_frame_master, text='Master -> ')
+            self.infos_m_label.config(bg='white')
+            self.infos_m_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+            self.infos_m = tk.Label(self.label_frame_master, text="tmp")
+            self.infos_m.config(bg='white')
+            self.infos_m.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+
+            self.label_frame_slave = tk.LabelFrame(self.label_frame_main)
+            self.label_frame_slave.pack(fill="both", expand="yes")
+
+            self.infos_s_label = tk.Label(self.label_frame_slave, text='Slave -> ')
+            self.infos_s_label.config(bg='white')
+            self.infos_s_label.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH)
+            self.infos_s = tk.Label(self.label_frame_slave, text="tmp")
+            self.infos_s.config(bg='white')
+            self.infos_s.pack(side=tk.LEFT, anchor=tk.NW, fill=tk.BOTH, expand='yes')
+
+            self.prediction_frame = tk.Frame(self.window)
+            self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
+
+            self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
+            self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_main.pack(side=tk.LEFT)
+            self.prediction_label_m.config(fg='red')
+            self.prediction_label_m.pack(side=tk.LEFT)
+            self.prediction_label_s.config(fg='red')
+            self.prediction_label_s.pack(side=tk.LEFT)
+
+            self.update_values()
 
     def open_config_window(self):
         global config
