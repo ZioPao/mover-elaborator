@@ -26,7 +26,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()  # Set the controller
-        self.knn = pickle.load(open('trained_models/model16.bin', 'rb'))  # Loading prediction model
+        self.knn = pickle.load(open('trained_models/model17.bin', 'rb'))  # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -159,8 +159,6 @@ class MoverReceiver:
                 except Exception:
                     pass
 
-
-
         try:
             '''PEAK DETECTION'''
             mov_test = rdd_base()
@@ -208,7 +206,6 @@ class MoverReceiver:
                         self.doing_prediction = False
                         self.controller.set_analog(self.predictions)
                         if debug_printing_receiver:
-                            #print(self.predictions)
                             #print(self.acc_values)
                             test_array = np.array(self.acc_values)
                             mean_x = abs(np.mean(test_array[:, [0]]))
@@ -217,7 +214,9 @@ class MoverReceiver:
                             final_mean = (mean_x + mean_y + mean_z)/3
                             #print(final_mean)
                             if final_mean > 1.2:
-                                print("Running?")
+                                print("R")
+                            print(self.predictions)
+
                             print('--------------------')
 
                 except (ValueError, IndexError) as e:

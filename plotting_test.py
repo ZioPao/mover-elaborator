@@ -39,7 +39,7 @@ plt.show()
 
 
 import numpy as np
-s_time = mov.values_prediction_test[0][5]
+#s_time = mov.values_prediction_test[0][5]
 
 act = 1.0
 prediction_list = []
