@@ -1,6 +1,11 @@
 import numpy as np
 import pickle
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn import svm
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 
 
 # setup for single types of act
@@ -51,11 +56,23 @@ X_test = final_X[indices[-10:]]
 y_test = final_y[indices[-10:]]
 
 knn = KNeighborsClassifier(n_neighbors=5)
+clf = svm.SVC(random_state=0)
+clf.fit(X_train, y_train)
+
+y_pred = clf.predict(X_test)
+cm = confusion_matrix(y_test, y_pred)
+plt.matshow(cm)
+plt.title('Confusion matrix')
+plt.colorbar()
+plt.ylabel('True label')
+plt.xlabel('Predicted label')
+plt.show()
+
+
+
 knn.fit(X_train, y_train)
 pickle.dump(knn, open('trained_models/model17.bin', 'wb'))
 
-# test
-test = knn.predict(X_test)
 
 # when crouching it should count as walking\running
 # not finding correctly when going down while walking

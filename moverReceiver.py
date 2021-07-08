@@ -213,7 +213,7 @@ class MoverReceiver:
                             mean_z = abs(np.mean(test_array[:, [0]]))
                             final_mean = (mean_x + mean_y + mean_z)/3
                             #print(final_mean)
-                            if final_mean > 1.2:
+                            if final_mean > 1.1:
                                 print("R")
                             print(self.predictions)
 
