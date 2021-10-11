@@ -5,10 +5,18 @@ import tkinter as tk
 import re
 import pickle
 import threading
-import numpy as np
 from controller_module import Controller
 from config import *
 
+from scipy import signal
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+
+first_time = None
+x_list = []
+t_list = []
+x_filtered_list = []
 
 class MoverReceiver:
 
@@ -23,7 +31,7 @@ class MoverReceiver:
         self.id_slave = 0
 
         self.has_connection_been_estabilished = False
-        self.main_mover, self.slave_mover = self.init_movers()
+        self.main_mover = self.init_movers()
 
         self.controller = Controller()  # Set the controller
         self.knn = pickle.load(open('trained_models/model17.bin', 'rb'))  # Loading prediction model
@@ -48,11 +56,13 @@ class MoverReceiver:
     def init_movers(self):
 
         mov_master_tmp = None
-        mov_slave_tmp = None
         id_tmp = 0
 
-        while (mov_master_tmp and mov_slave_tmp) is None:
 
+        # this was janky before and it's even worse now.
+
+        ###### Connect only master for now
+        while (mov_master_tmp) is None:
             try:
                 mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.01)
                 ser_bytes_tmp = mov_tmp.readline()
@@ -63,10 +73,6 @@ class MoverReceiver:
                     mov_master_tmp = mov_tmp
                     mov_master_tmp.write(b'c')
                     self.id_master = id_tmp
-                if re.match('SLAVE', decoded_bytes_tmp):
-                    mov_slave_tmp = mov_tmp
-                    mov_slave_tmp.write(b'c')
-                    self.id_slave = id_tmp
             except SerialException:
                 pass
             print(id_tmp)
@@ -74,11 +80,9 @@ class MoverReceiver:
             if id_tmp > 10:
                 break
 
-        if mov_master_tmp and mov_slave_tmp:
+        if mov_master_tmp:
             print("Connected Master -> COM" + str(self.id_master))
             mov_master_tmp.flushInput()
-            print("Connected Slave -> COM" + str(self.id_slave))
-            mov_slave_tmp.flushInput()
 
             self.has_connection_been_estabilished = True
         else:
@@ -87,7 +91,7 @@ class MoverReceiver:
             mov_master_tmp = None
             mov_slave_tmp = None
 
-        return mov_master_tmp, mov_slave_tmp
+        return mov_master_tmp
 
     def re_init_movers(self):
         self.main_mover.write(b'r')
@@ -173,6 +177,23 @@ class MoverReceiver:
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
 
+    def read_tmp(self):
+        is_done = False
+
+        while is_done is False:
+            try:
+                self.main_mover.flushInput()
+                acc_line = self.main_mover.readline()
+                decoded_acc_line = acc_line.decode()
+                regex_search = re.findall('(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
+                m_raw_x = float(regex_search[0])
+                m_filtered_x = float(regex_search[1])
+                ms = float(regex_search[2])
+
+                return m_raw_x, m_filtered_x, ms
+
+            except Exception:
+                pass
     def loop(self):
 
         # Around 0.11 seconds to make a full loop
@@ -180,7 +201,7 @@ class MoverReceiver:
             try:
 
                 # check status of slave. if it's disconnected, it will throw SerialException
-                self.slave_mover.read()
+                #self.slave_mover.read()
 
                 if self.reset_mov:
                     print("Resetting!")
@@ -191,20 +212,39 @@ class MoverReceiver:
                 self.acc_values = list()
                 self.gyr_values = list()
 
-                self.read_decode_data()
-
-                if len(self.acc_values) == 0:
-                    continue
+                #self.read_decode_data()
+                x, x_filtered, ms = self.read_tmp()
 
                 try:
-                    # Predict type of movement
+                    if first_time is None:
+                        first_time = ms
+                except Exception:
+                    first_time = ms
 
+                print("Running")
+                if (ms - first_time)/1000 >= 15.0:
+                    print("stop")
+                    print("FOR THE LOVE OF GOD STOP")
+
+                x_list.append(x)
+                x_filtered_list.append(x_filtered)
+                t_list.append((ms - first_time)/1000)
+
+                #if len(self.acc_values) == 0:
+                #    continue
+
+
+
+                '''
+                try:
+                    # Predict type of movement
+                    
                     if self.detected_movement:
                         self.doing_prediction = True
                         self.predictions = self.knn.predict(np.array(self.values_prediction).reshape(1, -1))
                         self.values_prediction = []
                         self.doing_prediction = False
-                        self.controller.set_analog(self.predictions)
+                        self.controller.set_correct_predictions(self.predictions)
                         if debug_printing_receiver:
                             #print(self.acc_values)
                             test_array = np.array(self.acc_values)
@@ -218,10 +258,13 @@ class MoverReceiver:
                             print(self.predictions)
 
                             print('--------------------')
+                    else:
+                        self.controller.reduce_speed()
+                        #todo reduce speed and stop eventually
 
                 except (ValueError, IndexError) as e:
                     print(e)
-
+                '''
             except SerialException:
                 print("Mover disconnected! Retrying initialization")
                 self.main_mover = None
@@ -513,8 +556,74 @@ class GUI:
 ########################################################################################
 # Startup
 
-
 mov = MoverReceiver()
 gui = GUI(mov)
 
+
+
+
+
+plt.rcParams["figure.figsize"] = 10,5
+plt.rcParams["font.size"] = 16
+plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+plt.figure()
+plt.plot(t_list, x_list)
+plt.plot(t_list, x_filtered_list)
+plt.xlabel("time")
+plt.ylabel("x")
+plt.xlim([min(t_list), max(t_list)])
+plt.show()
+
+plt.figure()
+plt.plot(t_list, x_filtered_list)
+plt.xlabel("time")
+plt.ylabel("y")
+plt.show()
+
+y_fourier = np.fft.fft(x_list)
+y_filtered_fourier = np.fft.fft(x_filtered_list)
+cycles_fourier = np.fft.fftfreq(len(t_list), d=1.0/770)  # the frequencies in cycles/s
+
+plt.figure()
+plt.plot(cycles_fourier, np.absolute(y_fourier))
+plt.plot(cycles_fourier, np.absolute(y_filtered_fourier))
+plt.xlim([-100, 100])
+plt.xlabel("$\omega$ (cycles/s)")
+plt.ylabel("$|\hat{y}|$")
+plt.show()
 # checks if it's actually moving. if it's moving, we have to check the window of around 1 second...
+
+w0 = 2*np.pi*5 # pole frequency (rad/s)
+num = w0        # transfer function numerator coefficients
+den = [1, w0]    # transfer function denominator coefficients
+dt = 1.0/772
+discreteLowPass = signal.cont2discrete((num, den), dt, method='gbt', alpha=0.5)
+
+
+
+# The coefficients from the discrete form of the filter transfer function (but with a negative sign)
+b = discreteLowPass[0][0]
+a = discreteLowPass[1]
+print("Filter coefficients b_i: " + str(b))
+print("Filter coefficients a_i: " + str(a[1:]))
+
+# Filter the signal
+yfilt = np.zeros(len(x_list))
+for i in range(0, len(x_list)):
+    yfilt[i] = a[1]*yfilt[i-1] + b[0]*x_list[i] + b[1]*x_list[i-1]
+
+plt.figure()
+plt.plot(t_list, x_list)
+plt.plot(t_list, yfilt)
+plt.ylabel("$y(t)$")
+plt.show()
+
+yfilthat = np.fft.fft(yfilt)
+fcycles = np.fft.fftfreq(len(t_list), d=1.0/772)
+
+plt.figure()
+plt.plot(fcycles,np.absolute(y_fourier))
+plt.plot(fcycles,np.absolute(yfilthat))
+plt.xlim([-100,100])
+plt.xlabel("$\omega$ (cycles/s)")
+plt.ylabel("$|\hat{y}|$")

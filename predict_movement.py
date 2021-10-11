@@ -2,8 +2,6 @@ import numpy as np
 import pickle
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import svm
-from sklearn.model_selection import cross_val_score
-from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 
@@ -21,18 +19,24 @@ n_samples, nx, ny = walk_X.shape
 walk_X_r = walk_X.reshape((n_samples, nx*ny))
 walk_y = np.zeros(n_samples)
 
-
 side_left_X = pickle.load(open('datasets_to_compile/prediction_list_sideLeft.bin', 'rb'))
 side_left_X = np.array(side_left_X)
 n_samples, nx, ny = side_left_X.shape
 side_left_X_r = side_left_X.reshape((n_samples, nx*ny))
 side_left_y = np.ones(n_samples)
 
-#side_right_X = pickle.load(open('datasets_to_compile/prediction_list_sideRight.bin', 'rb'))
-#side_right_X = np.array(side_right_X)
-#n_samples, nx, ny = side_right_X.shape
-#side_right_X_r = side_right_X.reshape((n_samples, nx*ny))
-#side_right_y = 1
+side_right_X = pickle.load(open('datasets_to_compile/prediction_list_sideRight3.bin', 'rb'))
+side_right_X = np.array(side_right_X)
+n_samples, nx, ny = side_right_X.shape
+side_right_X_r = side_right_X.reshape((n_samples, nx*ny))
+side_right_y = np.full(n_samples, 2)
+
+jump_X = pickle.load(open('datasets_to_compile/prediction_list_jump.bin', 'rb'))
+jump_X = np.array(jump_X)
+n_samples, nx, ny = jump_X.shape
+jump_X_r = jump_X.reshape((n_samples, nx*ny))
+jump_y = np.full(n_samples, 3)
+
 
 #run_X = pickle.load(open('datasets_to_compile/prediction_list_run1.bin', 'rb'))
 #run_X = np.array(run_X)
@@ -42,27 +46,32 @@ side_left_y = np.ones(n_samples)
 
 
 final_X = np.vstack((walk_X_r, side_left_X_r))
-final_y = np.append(walk_y, side_left_y)
+final_X = np.vstack((final_X, side_right_X_r))
+final_X = np.vstack((final_X, jump_X_r))
 
+final_y = np.append(walk_y, side_left_y)
+final_y = np.append(final_y, side_right_y)
+final_y = np.append(final_y, jump_y)
 
 # let's mix it up boy
 np.random.seed(0)
 indices = np.random.permutation(len(final_X))
-X_train = final_X[indices[:-10]]
-y_train = final_y[indices[:-10]]
+X_train = final_X[indices[:-30]]
+y_train = final_y[indices[:-30]]
 
-
-X_test = final_X[indices[-10:]]
-y_test = final_y[indices[-10:]]
+X_test = final_X[indices[-30:]]
+y_test = final_y[indices[-30:]]
 
 knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+
 clf = svm.SVC(random_state=0)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
 cm = confusion_matrix(y_test, y_pred)
 plt.matshow(cm)
-plt.title('Confusion matrix')
+plt.title('Confusion matrix (SVC)')
 plt.colorbar()
 plt.ylabel('True label')
 plt.xlabel('Predicted label')
@@ -70,8 +79,7 @@ plt.show()
 
 
 
-knn.fit(X_train, y_train)
-pickle.dump(knn, open('trained_models/model17.bin', 'wb'))
+pickle.dump(knn, open('trained_models/model19.bin', 'wb'))
 
 
 # when crouching it should count as walking\running
@@ -89,3 +97,7 @@ pickle.dump(knn, open('trained_models/model17.bin', 'wb'))
 # MODEL 15: non ci serve lo stato di quiete se lo possiamo determinare in maniera più easy. Evita possibili sbagli e aumenta chacne di sbagliare
 # MODEL 16: altri test, nulla da segnalare
 # MODEL 17: eliminata corsa (proviamo a determinarla con media ora) e aggiunto side left
+# MODEL 18: migliorato 17 semplicemente con side right aggiunto
+# MODEL 19: aggiunto salto
+
+
