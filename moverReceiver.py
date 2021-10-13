@@ -13,10 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-first_time = None
-x_list = []
-t_list = []
-x_filtered_list = []
+
 
 class MoverReceiver:
 
@@ -177,6 +174,20 @@ class MoverReceiver:
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
 
+    def filtering(self, frame):
+        b = [0.00066048, 0.00132097, 0.00066048]
+        a = [-1, 1.92600086, -0.92864279]
+        Nb = len(b)
+        for axis in frame:
+            filtered_frame = np.zeros(len(axis))
+            for m in range(3, len(axis)):
+                filtered_frame[m] = b[0] * axis[m]
+                for i in range(1, Nb):
+                    filtered_frame[m] += a[i] * filtered_frame[m - i] + b[i] * axis[m - i]
+
+        return filtered_frame
+
+
     def read_tmp(self):
         is_done = False
 
@@ -185,15 +196,17 @@ class MoverReceiver:
                 self.main_mover.flushInput()
                 acc_line = self.main_mover.readline()
                 decoded_acc_line = acc_line.decode()
-                regex_search = re.findall('(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
-                m_raw_x = float(regex_search[0])
-                m_filtered_x = float(regex_search[1])
-                ms = float(regex_search[2])
+                regex_search = re.findall('(\S*),(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
+                x = float(regex_search[0])
+                y = float(regex_search[1])
+                z = float(regex_search[2])
+                ms = float(regex_search[3])/1000
 
-                return m_raw_x, m_filtered_x, ms
+                return x, y, z, ms
 
             except Exception:
                 pass
+
     def loop(self):
 
         # Around 0.11 seconds to make a full loop
@@ -213,22 +226,37 @@ class MoverReceiver:
                 self.gyr_values = list()
 
                 #self.read_decode_data()
-                x, x_filtered, ms = self.read_tmp()
+                x, y, z, ms = self.read_tmp()
+
 
                 try:
-                    if first_time is None:
+                    if first_time == -1 or first_time is None:
                         first_time = ms
                 except Exception:
-                    first_time = ms
+                    self.main_mover.flushInput()
+                    first_time = -1
+                    continue
 
-                print("Running")
-                if (ms - first_time)/1000 >= 15.0:
+                print("First time: " + str(first_time))
+                print("Current time: " + str(ms))
+
+                ms = ms - first_time     # convert it
+                print("Corrected time: " + str(ms))
+
+                if 1.0 >= ms > -1:
+                    # Read until first second to make a frame
+                    x_list.append(x)
+                    y_list.append(y)
+                    z_list.append(z)
+                    t_list.append(ms)
+
                     print("stop")
                     print("FOR THE LOVE OF GOD STOP")
-
-                x_list.append(x)
-                x_filtered_list.append(x_filtered)
-                t_list.append((ms - first_time)/1000)
+                else:
+                    #all_frames.append(current_frame)
+                    current_frame = (x_list, y_list, z_list)
+                    filtered_frame = self.filtering(current_frame)
+                    first_time = -1     # reset frame time
 
                 #if len(self.acc_values) == 0:
                 #    continue
@@ -555,24 +583,69 @@ class GUI:
 
 ########################################################################################
 # Startup
+first_time = None
+x_list = []
+y_list = []
+z_list = []
+t_list = []
+x_filtered_list = []
+x_full_list = []
+y_full_list = []
+z_full_list = []
+t_full_list = []
 
+current_frame = []
+all_frames = []
 mov = MoverReceiver()
 gui = GUI(mov)
 
 
+for x in all_frames:
+    x_full_list.append([var[0] for var in x])
+    # check len, must be > 500 Hz ?
+
+y_full_list = []
+for y in all_frames:
+    y_full_list.append([var[1] for var in y])
+
+z_full_list = []
+for z in all_frames:
+    z_full_list.append([var[2] for var in z])
 
 
+t_full_list = []
+for t in all_frames:
+    t_full_list.append([var[3] for var in t])
 
-plt.rcParams["figure.figsize"] = 10,5
-plt.rcParams["font.size"] = 16
-plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
-plt.figure()
-plt.plot(t_list, x_list)
-plt.plot(t_list, x_filtered_list)
-plt.xlabel("time")
-plt.ylabel("x")
-plt.xlim([min(t_list), max(t_list)])
-plt.show()
+for i in range(0, 12):
+    x_list = x_full_list[i]
+    x_list.pop(0)
+
+    y_list = y_full_list[i]
+    y_list.pop(0)
+
+    z_list = z_full_list[i]
+    z_list.pop(0)
+
+    fixed_z_list = []
+    for z in z_list:
+        fixed_z_list.append(z - 8150)
+
+    t_list = t_full_list[i]
+    t_list.pop()
+
+    plt.rcParams["figure.figsize"] = 10, 5
+    plt.rcParams["font.size"] = 16
+    plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+    plt.figure()
+    plt.plot(t_list, x_list)
+    plt.plot(t_list, y_list)
+    plt.plot(t_list, fixed_z_list)
+    plt.title(i)
+    plt.xlabel("time")
+    plt.ylabel("axis")
+    plt.xlim([min(t_list), max(t_list)])
+    plt.show()
 
 plt.figure()
 plt.plot(t_list, x_filtered_list)
@@ -603,13 +676,13 @@ discreteLowPass = signal.cont2discrete((num, den), dt, method='gbt', alpha=0.5)
 
 # The coefficients from the discrete form of the filter transfer function (but with a negative sign)
 b = discreteLowPass[0][0]
-a = discreteLowPass[1]
+a = [-x for x in discreteLowPass]
 print("Filter coefficients b_i: " + str(b))
 print("Filter coefficients a_i: " + str(a[1:]))
 
 # Filter the signal
 yfilt = np.zeros(len(x_list))
-for i in range(0, len(x_list)):
+for i in range(3, len(x_list)):
     yfilt[i] = a[1]*yfilt[i-1] + b[0]*x_list[i] + b[1]*x_list[i-1]
 
 plt.figure()
@@ -627,3 +700,102 @@ plt.plot(fcycles,np.absolute(yfilthat))
 plt.xlim([-100,100])
 plt.xlabel("$\omega$ (cycles/s)")
 plt.ylabel("$|\hat{y}|$")
+
+
+#### BUTTERWORTH LOW PASS
+
+samplingFreq = 600 # around this
+signalFreq = [2, 100]
+
+# Butterworth filter
+wc = 2*np.pi*5 # cutoff frequency (rad/s)
+n = 2 # Filter order
+
+# Compute the Butterworth filter coefficents
+a = np.zeros(n+1)
+gamma = np.pi/(2.0*n)
+a[0] = 1 # first coef is always 1
+for k in range(0, n):
+    rfac = np.cos(k*gamma)/np.sin((k+1)*gamma)
+    a[k+1] = rfac*a[k] # Other coefficients by recursion
+
+print("Butterworth polynomial coefficients a_i:                " + str(a))
+
+# Adjust the cutoff frequency
+c = np.zeros(n+1)
+for k in range(0, n+1):
+    c[n-k] = a[k]/pow(wc, k)
+
+print("Butterworth coefficients with frequency adjustment c_i: " + str(c))
+# Low-pass filter
+w0 = 2*np.pi*5 # pole frequency (rad/s)
+num = [1]      # transfer function numerator coefficients
+den = c       # transfer function denominator coefficients
+lowPass = signal.TransferFunction(num,den) # Transfer function
+
+# Generate the bode plot
+w = np.logspace( np.log10(min(signalFreq)*2*np.pi/10), np.log10(max(signalFreq)*2*np.pi*10), 500 )
+w, mag, phase = signal.bode(lowPass, w)
+
+# Magnitude plot
+plt.figure()
+plt.semilogx(w, mag)
+for sf in signalFreq:
+    plt.semilogx([sf*2*np.pi,sf*2*np.pi],[min(mag),max(mag)],'k:')
+plt.ylabel("Magnitude ($dB$)")
+plt.xlim([min(w),max(w)])
+plt.ylim([min(mag),max(mag)])
+
+# Phase plot
+plt.figure()
+plt.semilogx(w, phase)  # Bode phase plot
+plt.ylabel("Phase ($^\circ$)")
+plt.xlabel("$\omega$ (rad/s)")
+plt.xlim([min(w),max(w)])
+plt.show()
+
+# Compute the discrete low pass with delta_t = 1/samplingFrequency
+dt = 1.0/samplingFreq
+discreteLowPass = lowPass.to_discrete(dt,method='gbt',alpha=0.5)
+print(discreteLowPass)
+
+# The coefficients from the discrete form of the filter transfer function (but with a negative sign)
+b = discreteLowPass.num
+a = -discreteLowPass.den
+print("Filter coefficients b_i: " + str(b))
+print("Filter coefficients a_i: " + str(a[1:]))
+
+# Filter the signal
+Nb = len(b)
+xfilt = np.zeros(len(x_full_list))
+for m in range(3, len(x_full_list)):
+    xfilt[m] = b[0] * x_full_list[m]
+    for i in range(1, Nb):
+        xfilt[m] += a[i] * xfilt[m - i] + b[i] * x_full_list[m - i]
+# View the result
+# Plot the signal
+plt.figure()
+plt.plot(t_full_list, x_full_list)
+plt.plot(t_full_list, xfilt)
+plt.ylabel("$y(t)$")
+plt.xlim([min(t_full_list), max(t_full_list)])
+plt.show()
+
+# Generate Fourier transform
+yfilthat = np.fft.fft(yfilt)
+fcycles = np.fft.fftfreq(len(t),d=1.0/samplingFreq)
+
+plt.figure()
+plt.plot(fcycles,np.absolute(yhat));
+plt.plot(fcycles,np.absolute(yfilthat));
+plt.xlim([-100,100]);
+plt.xlabel("$\omega$ (cycles/s)");
+plt.ylabel("$|\hat{y}|$");
+
+
+
+
+s = time.time()
+filtering(frame)
+e = time.time()
+print(str(e-s))
