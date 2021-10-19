@@ -1,3 +1,4 @@
+import statistics
 import time
 import serial
 from serial import SerialException
@@ -11,8 +12,7 @@ from config import *
 from scipy import signal
 import matplotlib.pyplot as plt
 import numpy as np
-import math
-
+from statistics import mean
 
 
 class MoverReceiver:
@@ -28,10 +28,10 @@ class MoverReceiver:
         self.id_slave = 0
 
         self.has_connection_been_estabilished = False
-        self.main_mover = self.init_movers()
+        self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()  # Set the controller
-        self.knn = pickle.load(open('trained_models/model17.bin', 'rb'))  # Loading prediction model
+        #self.model = pickle.load(open('trained_models/model22.bin', 'rb'))  # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -53,13 +53,13 @@ class MoverReceiver:
     def init_movers(self):
 
         mov_master_tmp = None
+        mov_slave_tmp = None
         id_tmp = 0
-
 
         # this was janky before and it's even worse now.
 
         ###### Connect only master for now
-        while (mov_master_tmp) is None:
+        while mov_master_tmp is None or mov_slave_tmp is None:
             try:
                 mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.01)
                 ser_bytes_tmp = mov_tmp.readline()
@@ -68,8 +68,14 @@ class MoverReceiver:
                 # todo rewrite this
                 if re.match('MASTER', decoded_bytes_tmp):
                     mov_master_tmp = mov_tmp
-                    mov_master_tmp.write(b'c')
+                    # mov_master_tmp.write(b'c')
                     self.id_master = id_tmp
+                if re.match('SLAVE', decoded_bytes_tmp):
+                    mov_slave_tmp = mov_tmp
+                    # mov_master_tmp.write(b'c')
+                    self.id_slave = id_tmp
+
+
             except SerialException:
                 pass
             print(id_tmp)
@@ -79,6 +85,8 @@ class MoverReceiver:
 
         if mov_master_tmp:
             print("Connected Master -> COM" + str(self.id_master))
+            print("Connected Slave -> COM" + str(self.id_slave))
+
             mov_master_tmp.flushInput()
 
             self.has_connection_been_estabilished = True
@@ -88,7 +96,7 @@ class MoverReceiver:
             mov_master_tmp = None
             mov_slave_tmp = None
 
-        return mov_master_tmp
+        return mov_master_tmp, mov_slave_tmp
 
     def re_init_movers(self):
         self.main_mover.write(b'r')
@@ -143,7 +151,6 @@ class MoverReceiver:
                     m_gyr_y = float(regex_search[0])
                     m_gyr_z = float(regex_search[1])
 
-
                     # self.gyr_values.append([m_gyr_y, m_gyr_z])
                     # self.gyr_values.append([s_gyr_y, s_gyr_z])
 
@@ -155,7 +162,7 @@ class MoverReceiver:
                         # print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
 
                     else:
-                        return (abs(m_raw_x) + abs(m_raw_y) + abs(m_raw_z))/3  # as movement test
+                        return (abs(m_raw_x) + abs(m_raw_y) + abs(m_raw_z)) / 3  # as movement test
 
                 except Exception:
                     pass
@@ -164,7 +171,7 @@ class MoverReceiver:
             '''PEAK DETECTION'''
             mov_test = rdd_base()
             if mov_test > 0.75:
-                #print("Detected movement!")
+                # print("Detected movement!")
                 self.detected_movement = True
                 # start prediction stuff
                 while len(self.values_prediction) < 30:
@@ -178,15 +185,19 @@ class MoverReceiver:
         b = [0.00066048, 0.00132097, 0.00066048]
         a = [-1, 1.92600086, -0.92864279]
         Nb = len(b)
+        final_frame = []
         for axis in frame:
-            filtered_frame = np.zeros(len(axis))
+            single_f_frame = np.zeros(len(axis))
             for m in range(3, len(axis)):
-                filtered_frame[m] = b[0] * axis[m]
+                single_f_frame[m] = b[0] * axis[m]
                 for i in range(1, Nb):
-                    filtered_frame[m] += a[i] * filtered_frame[m - i] + b[i] * axis[m - i]
+                    single_f_frame[m] += a[i] * single_f_frame[m - i] + b[i] * axis[m - i]
+            # fix the first three values
+            single_f_frame = single_f_frame[3:]
+            final_frame.append(tuple(single_f_frame))
 
-        return filtered_frame
 
+        return tuple(final_frame)
 
     def read_tmp(self):
         is_done = False
@@ -194,28 +205,31 @@ class MoverReceiver:
         while is_done is False:
             try:
                 self.main_mover.flushInput()
-                acc_line = self.main_mover.readline()
-                decoded_acc_line = acc_line.decode()
-                regex_search = re.findall('(\S*),(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
-                x = float(regex_search[0])
-                y = float(regex_search[1])
-                z = float(regex_search[2])
-                ms = float(regex_search[3])/1000
+                line = self.main_mover.readline().decode()
+                regex_search = re.findall('m,(\S*),(\S*),(\S*)', line[:-2])[0]
+                x_m = float(regex_search[0])
+                y_m = float(regex_search[1])
+                z_m = float(regex_search[2]) - 8100  # not really precise but hey
 
-                return x, y, z, ms
+                line = self.main_mover.readline().decode()
+                regex_search = re.findall('s,(\S*),(\S*),(\S*)', line[:-2])[0]
+                x_s = float(regex_search[0])
+                y_s = float(regex_search[1])
+                z_s = float(regex_search[2]) - 8100  # not really precise but hey
+
+                line = self.main_mover.readline().decode()
+                regex_search = re.findall('(\S*)', line[:-2])[0]
+                sec = float(regex_search) / 1000
+
+                return x_m, y_m, z_m, x_s, y_s, z_s, sec
 
             except Exception:
-                pass
+                self.main_mover.flushInput()
 
     def loop(self):
 
-        # Around 0.11 seconds to make a full loop
         while self.should_run_thread:
             try:
-
-                # check status of slave. if it's disconnected, it will throw SerialException
-                #self.slave_mover.read()
-
                 if self.reset_mov:
                     print("Resetting!")
                     time.sleep(3)
@@ -225,42 +239,80 @@ class MoverReceiver:
                 self.acc_values = list()
                 self.gyr_values = list()
 
-                #self.read_decode_data()
-                x, y, z, ms = self.read_tmp()
-
+                # self.read_decode_data()
+                x_m, y_m, z_m, x_s, y_s, z_s, sec = self.read_tmp()
 
                 try:
                     if first_time == -1 or first_time is None:
-                        first_time = ms
+                        first_time = sec
                 except Exception:
                     self.main_mover.flushInput()
                     first_time = -1
                     continue
 
-                print("First time: " + str(first_time))
-                print("Current time: " + str(ms))
+                # print("First time: " + str(first_time))
+                # print("Current time: " + str(ms))
 
-                ms = ms - first_time     # convert it
-                print("Corrected time: " + str(ms))
+                sec = sec - first_time  # convert it
+                #print("Corrected time: " + str(sec))
 
-                if 1.0 >= ms > -1:
+                if sec > -1:
                     # Read until first second to make a frame
-                    x_list.append(x)
-                    y_list.append(y)
-                    z_list.append(z)
-                    t_list.append(ms)
+                    try:
 
-                    print("stop")
-                    print("FOR THE LOVE OF GOD STOP")
-                else:
-                    #all_frames.append(current_frame)
-                    current_frame = (x_list, y_list, z_list)
-                    filtered_frame = self.filtering(current_frame)
-                    first_time = -1     # reset frame time
+                        x_list_m.append(x_m)
+                        y_list_m.append(y_m)
+                        z_list_m.append(z_m)
 
-                #if len(self.acc_values) == 0:
-                #    continue
+                        x_list_s.append(x_s)
+                        y_list_s.append(y_s)
+                        z_list_s.append(z_s)
 
+                        t_list.append(sec)
+                    except UnboundLocalError:
+                        x_list_m = []
+                        y_list_m = []
+                        z_list_m = []
+                        x_list_s = []
+                        y_list_s = []
+                        z_list_s = []
+                        t_list = []
+
+                '''try:
+                    if abs(mean(x_list_m)) < 200:
+                        for single_list in [x_list_m, y_list_m, z_list_m, x_list_s, y_list_s, z_list_s]:
+                           single_list.clear()  # clean everything
+
+                        first_time = -1
+                except statistics.StatisticsError:
+                    pass
+
+                    first_time = -1
+'''
+
+                #203 because of the three values going missing after filtering.
+                if len(x_list_m) > 203:
+                    print("new frame with " + str(len(x_list_m)) + " values")
+                    # all_frames.append(current_frame)
+                    current_frame_m = (x_list_m, y_list_m, z_list_m)
+                    #current_frame_s = (x_list_s, y_list_s, z_list_s)
+                    filtered_frame_m = self.filtering(current_frame_m)
+                    #filtered_frame_s = self.filtering(current_frame_s)
+                    for single_list in [x_list_m, y_list_m, z_list_m, x_list_s, y_list_s, z_list_s]:
+                        single_list.clear()
+                    t_list = []
+                    first_time = -1  # reset frame time
+                    tuple_list.append(filtered_frame_m)
+
+                    ## PREDICTION
+                    '''
+                    self.doing_prediction = True
+                    prediction_m = self.model.predict(np.array(filtered_frame_m).reshape(1, -1))
+                    prediction_s = self.model.predict(np.array(filtered_frame_s).reshape(1, -1))
+                    self.values_prediction = []
+                    self.doing_prediction = False
+                    self.controller.set_correct_predictions(self.predictions)
+                    '''
 
 
                 '''
@@ -301,6 +353,7 @@ class MoverReceiver:
                     self.init_movers()
                 self.reset_mov = True
 
+    # Thread running section
     def startup_threaded_loop(self):
 
         if self.should_run_thread is False:
@@ -474,10 +527,9 @@ class GUI:
         self.prediction_label_main.after(1, self.update_values)
 
     def retry_connection(self):
-        self.mover.main_mover, self.mover.slave_mover = self.mover.init_movers()
+        self.mover.main_mover = self.mover.init_movers()
 
         if self.mover.has_connection_been_estabilished:
-
             self.retry_button.destroy()
 
             self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
@@ -584,9 +636,12 @@ class GUI:
 ########################################################################################
 # Startup
 first_time = None
-x_list = []
-y_list = []
-z_list = []
+x_list_m = []
+y_list_m = []
+z_list_m = []
+x_list_s = []
+y_list_s = []
+z_list_s = []
 t_list = []
 x_filtered_list = []
 x_full_list = []
@@ -596,10 +651,12 @@ t_full_list = []
 
 current_frame = []
 all_frames = []
+tuple_list = []
+
 mov = MoverReceiver()
 gui = GUI(mov)
 
-
+################################################################################################
 for x in all_frames:
     x_full_list.append([var[0] for var in x])
     # check len, must be > 500 Hz ?
@@ -611,7 +668,6 @@ for y in all_frames:
 z_full_list = []
 for z in all_frames:
     z_full_list.append([var[2] for var in z])
-
 
 t_full_list = []
 for t in all_frames:
@@ -636,7 +692,7 @@ for i in range(0, 12):
 
     plt.rcParams["figure.figsize"] = 10, 5
     plt.rcParams["font.size"] = 16
-    plt.rcParams.update({"text.usetex": True,"font.family": "sans-serif","font.sans-serif": ["Helvetica"]})
+    plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif", "font.sans-serif": ["Helvetica"]})
     plt.figure()
     plt.plot(t_list, x_list)
     plt.plot(t_list, y_list)
@@ -655,7 +711,7 @@ plt.show()
 
 y_fourier = np.fft.fft(x_list)
 y_filtered_fourier = np.fft.fft(x_filtered_list)
-cycles_fourier = np.fft.fftfreq(len(t_list), d=1.0/770)  # the frequencies in cycles/s
+cycles_fourier = np.fft.fftfreq(len(t_list), d=1.0 / 770)  # the frequencies in cycles/s
 
 plt.figure()
 plt.plot(cycles_fourier, np.absolute(y_fourier))
@@ -666,13 +722,11 @@ plt.ylabel("$|\hat{y}|$")
 plt.show()
 # checks if it's actually moving. if it's moving, we have to check the window of around 1 second...
 
-w0 = 2*np.pi*5 # pole frequency (rad/s)
-num = w0        # transfer function numerator coefficients
-den = [1, w0]    # transfer function denominator coefficients
-dt = 1.0/772
+w0 = 2 * np.pi * 5  # pole frequency (rad/s)
+num = w0  # transfer function numerator coefficients
+den = [1, w0]  # transfer function denominator coefficients
+dt = 1.0 / 772
 discreteLowPass = signal.cont2discrete((num, den), dt, method='gbt', alpha=0.5)
-
-
 
 # The coefficients from the discrete form of the filter transfer function (but with a negative sign)
 b = discreteLowPass[0][0]
@@ -683,7 +737,7 @@ print("Filter coefficients a_i: " + str(a[1:]))
 # Filter the signal
 yfilt = np.zeros(len(x_list))
 for i in range(3, len(x_list)):
-    yfilt[i] = a[1]*yfilt[i-1] + b[0]*x_list[i] + b[1]*x_list[i-1]
+    yfilt[i] = a[1] * yfilt[i - 1] + b[0] * x_list[i] + b[1] * x_list[i - 1]
 
 plt.figure()
 plt.plot(t_list, x_list)
@@ -692,71 +746,70 @@ plt.ylabel("$y(t)$")
 plt.show()
 
 yfilthat = np.fft.fft(yfilt)
-fcycles = np.fft.fftfreq(len(t_list), d=1.0/772)
+fcycles = np.fft.fftfreq(len(t_list), d=1.0 / 772)
 
 plt.figure()
-plt.plot(fcycles,np.absolute(y_fourier))
-plt.plot(fcycles,np.absolute(yfilthat))
-plt.xlim([-100,100])
+plt.plot(fcycles, np.absolute(y_fourier))
+plt.plot(fcycles, np.absolute(yfilthat))
+plt.xlim([-100, 100])
 plt.xlabel("$\omega$ (cycles/s)")
 plt.ylabel("$|\hat{y}|$")
 
-
 #### BUTTERWORTH LOW PASS
 
-samplingFreq = 600 # around this
+samplingFreq = 600  # around this
 signalFreq = [2, 100]
 
 # Butterworth filter
-wc = 2*np.pi*5 # cutoff frequency (rad/s)
-n = 2 # Filter order
+wc = 2 * np.pi * 5  # cutoff frequency (rad/s)
+n = 2  # Filter order
 
 # Compute the Butterworth filter coefficents
-a = np.zeros(n+1)
-gamma = np.pi/(2.0*n)
-a[0] = 1 # first coef is always 1
+a = np.zeros(n + 1)
+gamma = np.pi / (2.0 * n)
+a[0] = 1  # first coef is always 1
 for k in range(0, n):
-    rfac = np.cos(k*gamma)/np.sin((k+1)*gamma)
-    a[k+1] = rfac*a[k] # Other coefficients by recursion
+    rfac = np.cos(k * gamma) / np.sin((k + 1) * gamma)
+    a[k + 1] = rfac * a[k]  # Other coefficients by recursion
 
 print("Butterworth polynomial coefficients a_i:                " + str(a))
 
 # Adjust the cutoff frequency
-c = np.zeros(n+1)
-for k in range(0, n+1):
-    c[n-k] = a[k]/pow(wc, k)
+c = np.zeros(n + 1)
+for k in range(0, n + 1):
+    c[n - k] = a[k] / pow(wc, k)
 
 print("Butterworth coefficients with frequency adjustment c_i: " + str(c))
 # Low-pass filter
-w0 = 2*np.pi*5 # pole frequency (rad/s)
-num = [1]      # transfer function numerator coefficients
-den = c       # transfer function denominator coefficients
-lowPass = signal.TransferFunction(num,den) # Transfer function
+w0 = 2 * np.pi * 5  # pole frequency (rad/s)
+num = [1]  # transfer function numerator coefficients
+den = c  # transfer function denominator coefficients
+lowPass = signal.TransferFunction(num, den)  # Transfer function
 
 # Generate the bode plot
-w = np.logspace( np.log10(min(signalFreq)*2*np.pi/10), np.log10(max(signalFreq)*2*np.pi*10), 500 )
+w = np.logspace(np.log10(min(signalFreq) * 2 * np.pi / 10), np.log10(max(signalFreq) * 2 * np.pi * 10), 500)
 w, mag, phase = signal.bode(lowPass, w)
 
 # Magnitude plot
 plt.figure()
 plt.semilogx(w, mag)
 for sf in signalFreq:
-    plt.semilogx([sf*2*np.pi,sf*2*np.pi],[min(mag),max(mag)],'k:')
+    plt.semilogx([sf * 2 * np.pi, sf * 2 * np.pi], [min(mag), max(mag)], 'k:')
 plt.ylabel("Magnitude ($dB$)")
-plt.xlim([min(w),max(w)])
-plt.ylim([min(mag),max(mag)])
+plt.xlim([min(w), max(w)])
+plt.ylim([min(mag), max(mag)])
 
 # Phase plot
 plt.figure()
 plt.semilogx(w, phase)  # Bode phase plot
 plt.ylabel("Phase ($^\circ$)")
 plt.xlabel("$\omega$ (rad/s)")
-plt.xlim([min(w),max(w)])
+plt.xlim([min(w), max(w)])
 plt.show()
 
 # Compute the discrete low pass with delta_t = 1/samplingFrequency
-dt = 1.0/samplingFreq
-discreteLowPass = lowPass.to_discrete(dt,method='gbt',alpha=0.5)
+dt = 1.0 / samplingFreq
+discreteLowPass = lowPass.to_discrete(dt, method='gbt', alpha=0.5)
 print(discreteLowPass)
 
 # The coefficients from the discrete form of the filter transfer function (but with a negative sign)
@@ -783,19 +836,16 @@ plt.show()
 
 # Generate Fourier transform
 yfilthat = np.fft.fft(yfilt)
-fcycles = np.fft.fftfreq(len(t),d=1.0/samplingFreq)
+fcycles = np.fft.fftfreq(len(t), d=1.0 / samplingFreq)
 
 plt.figure()
-plt.plot(fcycles,np.absolute(yhat));
-plt.plot(fcycles,np.absolute(yfilthat));
-plt.xlim([-100,100]);
+plt.plot(fcycles, np.absolute(yhat));
+plt.plot(fcycles, np.absolute(yfilthat));
+plt.xlim([-100, 100]);
 plt.xlabel("$\omega$ (cycles/s)");
 plt.ylabel("$|\hat{y}|$");
-
-
-
 
 s = time.time()
 filtering(frame)
 e = time.time()
-print(str(e-s))
+print(str(e - s))

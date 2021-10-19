@@ -44,9 +44,13 @@ class Controller:
 
         return new_y_value
 
-    def set_correct_predictions(self, preds):
+    def set_correct_predictions(self, preds, right=True):
         # will enter only if there's movement.
         # if there is only one 3, then we have to ignore it and choose the latter
+
+        # Will have to separate main from slave so we can manage lateral movement in a better way
+
+
 
         try:
             first_prediction = preds[0]
