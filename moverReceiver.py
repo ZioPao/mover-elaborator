@@ -6,13 +6,15 @@ import tkinter as tk
 import re
 import pickle
 import threading
-from controller_module import Controller
 from config import *
 
 from scipy import signal
 import matplotlib.pyplot as plt
 import numpy as np
 from statistics import mean
+
+from controller_module import Controller
+from filtering import filtering_pass
 
 
 class MoverReceiver:
@@ -31,7 +33,7 @@ class MoverReceiver:
         self.main_mover, self.slave_mover = self.init_movers()
 
         self.controller = Controller()  # Set the controller
-        #self.model = pickle.load(open('trained_models/model22.bin', 'rb'))  # Loading prediction model
+        self.model = pickle.load(open('trained_models/model23.bin', 'rb'))  # Loading prediction model
 
         self.main_prediction_list = []
         self.slave_prediction_list = []
@@ -56,9 +58,6 @@ class MoverReceiver:
         mov_slave_tmp = None
         id_tmp = 0
 
-        # this was janky before and it's even worse now.
-
-        ###### Connect only master for now
         while mov_master_tmp is None or mov_slave_tmp is None:
             try:
                 mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.01)
@@ -113,14 +112,9 @@ class MoverReceiver:
 
         print("------------MOVER MANAGER------------\n")
 
-        # Saves predicted movement from 3-4 loops to guess what movement is actually going. The most of the value wins
-        main_prediction_list = list()
-        slave_prediction_list = list()
-
         print("Start")
         self.main_mover.reset_input_buffer()
 
-    # Looping stuff
 
     def read_decode_data(self):
 
@@ -181,25 +175,8 @@ class MoverReceiver:
         except (ValueError, IndexError) as e:
             self.main_mover.flushInput()
 
-    def filtering(self, frame):
-        b = [0.00066048, 0.00132097, 0.00066048]
-        a = [-1, 1.92600086, -0.92864279]
-        Nb = len(b)
-        final_frame = []
-        for axis in frame:
-            single_f_frame = np.zeros(len(axis))
-            for m in range(3, len(axis)):
-                single_f_frame[m] = b[0] * axis[m]
-                for i in range(1, Nb):
-                    single_f_frame[m] += a[i] * single_f_frame[m - i] + b[i] * axis[m - i]
-            # fix the first three values
-            single_f_frame = single_f_frame[3:]
-            final_frame.append(tuple(single_f_frame))
-
-
-        return tuple(final_frame)
-
-    def read_tmp(self):
+    # Main operations
+    def read_data(self):
         is_done = False
 
         while is_done is False:
@@ -240,7 +217,7 @@ class MoverReceiver:
                 self.gyr_values = list()
 
                 # self.read_decode_data()
-                x_m, y_m, z_m, x_s, y_s, z_s, sec = self.read_tmp()
+                x_m, y_m, z_m, x_s, y_s, z_s, sec = self.read_data()
 
                 try:
                     if first_time == -1 or first_time is None:
@@ -295,9 +272,9 @@ class MoverReceiver:
                     print("new frame with " + str(len(x_list_m)) + " values")
                     # all_frames.append(current_frame)
                     current_frame_m = (x_list_m, y_list_m, z_list_m)
-                    #current_frame_s = (x_list_s, y_list_s, z_list_s)
-                    filtered_frame_m = self.filtering(current_frame_m)
-                    #filtered_frame_s = self.filtering(current_frame_s)
+                    current_frame_s = (x_list_s, y_list_s, z_list_s)
+                    filtered_frame_m = filtering_pass(current_frame_m)
+                    filtered_frame_s = filtering_pass(current_frame_s)
                     for single_list in [x_list_m, y_list_m, z_list_m, x_list_s, y_list_s, z_list_s]:
                         single_list.clear()
                     t_list = []
@@ -305,46 +282,13 @@ class MoverReceiver:
                     tuple_list.append(filtered_frame_m)
 
                     ## PREDICTION
-                    '''
                     self.doing_prediction = True
                     prediction_m = self.model.predict(np.array(filtered_frame_m).reshape(1, -1))
                     prediction_s = self.model.predict(np.array(filtered_frame_s).reshape(1, -1))
                     self.values_prediction = []
                     self.doing_prediction = False
-                    self.controller.set_correct_predictions(self.predictions)
-                    '''
+                    self.controller.manage_predictions(prediction_m, prediction_s)      #left, right
 
-
-                '''
-                try:
-                    # Predict type of movement
-                    
-                    if self.detected_movement:
-                        self.doing_prediction = True
-                        self.predictions = self.knn.predict(np.array(self.values_prediction).reshape(1, -1))
-                        self.values_prediction = []
-                        self.doing_prediction = False
-                        self.controller.set_correct_predictions(self.predictions)
-                        if debug_printing_receiver:
-                            #print(self.acc_values)
-                            test_array = np.array(self.acc_values)
-                            mean_x = abs(np.mean(test_array[:, [0]]))
-                            mean_y = abs(np.mean(test_array[:, [0]]))
-                            mean_z = abs(np.mean(test_array[:, [0]]))
-                            final_mean = (mean_x + mean_y + mean_z)/3
-                            #print(final_mean)
-                            if final_mean > 1.1:
-                                print("R")
-                            print(self.predictions)
-
-                            print('--------------------')
-                    else:
-                        self.controller.reduce_speed()
-                        #todo reduce speed and stop eventually
-
-                except (ValueError, IndexError) as e:
-                    print(e)
-                '''
             except SerialException:
                 print("Mover disconnected! Retrying initialization")
                 self.main_mover = None
@@ -635,6 +579,7 @@ class GUI:
 
 ########################################################################################
 # Startup
+# TODO better startup
 first_time = None
 x_list_m = []
 y_list_m = []
@@ -656,6 +601,7 @@ tuple_list = []
 mov = MoverReceiver()
 gui = GUI(mov)
 
+'''
 ################################################################################################
 for x in all_frames:
     x_full_list.append([var[0] for var in x])
@@ -848,4 +794,5 @@ plt.ylabel("$|\hat{y}|$");
 s = time.time()
 filtering(frame)
 e = time.time()
-print(str(e - s))
+print(str(e - s))'''
+

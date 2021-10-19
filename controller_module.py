@@ -9,20 +9,11 @@ CURR_ANALOG_KEY = 'current'
 
 
 NORMAL_MOV = 0.
-LEFT_MOV = 1.
-RIGHT_MOV = 2.
-JUMP_MOV = 3.
+RUN_MOV = 1.
+LEFT_MOV = 2.
+RIGHT_MOV = 3.
 
 class Controller:
-    # RECAP VALUES
-    # 0 -> moving (running determined by something different maybe
-    # 1 -> left mov
-    # 2 -> right mov
-    # 3 -> jump
-
-
-
-
     # 1) Get predictions from main
     # 2) Decide which to chose
     # 3) Set analog value for x and y depending on current value
@@ -44,103 +35,46 @@ class Controller:
 
         return new_y_value
 
-    def set_correct_predictions(self, preds, right=True):
-        # will enter only if there's movement.
-        # if there is only one 3, then we have to ignore it and choose the latter
+    def manage_predictions(self, pred_left, pred_right):
+        y_value = 0
+        x_value = 0
 
-        # Will have to separate main from slave so we can manage lateral movement in a better way
+        # WALK MOVEMENT
+        if pred_left == 0. and pred_right == 0.:
+            y_value = 0 if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range else self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
 
+        # RUN MOVEMENT
+        if pred_left == 1. and pred_right == 1.:
+            y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
 
+        # SIDE MOVEMENT
+        x_value = -1 if pred_left == 2. else 1 if pred_right == 3 else 0
+        # todo maybe less speedy
 
-        try:
-            first_prediction = preds[0]
-            second_prediction = preds[1]
+        # Finally applies the y_value to the controller
+        y_value = y_value if y_value > 0. else 0.
+        y_value = y_value if y_value < 1. else 1.
 
-            # NORMAL MOVEMENT
-            if first_prediction == 0. and second_prediction == 0.:
-                self.choose_prediction(NORMAL_MOV)
-
-            # LEFT MOVEMENT
-            if first_prediction == 1.:
-                self.choose_prediction(LEFT_MOV)
-
-            # RIGHT MOVEMENT
-            if second_prediction == 2.:
-                self.choose_prediction(RIGHT_MOV)
-
-            # JUMP
-            if first_prediction == 3. and second_prediction == 3.:
-                self.choose_prediction(JUMP_MOV)
-        except IndexError:
-            pass    # should never happen
-
-    def reduce_speed(self):
-        y_value = self.get_y_axis()
-        y_value -= walking_decrement   # todo fix it later, maybe not walking
-
-
-    def choose_prediction(self, prediction):
-        # todo better if ints and not floats
-
-        # at least 2 same prediction in a row to do something.
-        new_y_value = 0
-
-        if prediction == self.prev_prediction:
-
-            if prediction == 0.:
-                # stopped
-                if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range:
-                    new_y_value = 0
-                else:
-                    new_y_value = self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
-            if prediction == 1.:
-                # walking
-                new_y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
-            if prediction == 2.:
-                # jogging
-                new_y_value = self.get_new_analog_values(jogging_increment, jogging_decrement, jogging_top)
-
-                pass
-        else:
-            new_y_value = self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
-
-        # check overflow and underflow
-        if new_y_value < 0.:
-            new_y_value = 0.
-
-        if new_y_value > 1.:
-            new_y_value = 1.        # cap it off to max value
-
-        self.controller.set_value(LEFT_AXIS_Y, new_y_value)
-
+        self.controller.set_value(LEFT_AXIS_Y, y_value)
+        self.controller.set_value(LEFT_AXIS_X, x_value)
 
         # back them up
         self.analog_values_y[OLD_ANALOG_KEY] = self.analog_values_y[CURR_ANALOG_KEY]
-        self.analog_values_y[CURR_ANALOG_KEY] = new_y_value
+        self.analog_values_y[CURR_ANALOG_KEY] = y_value
 
-        #self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
-        #self.analog_values_x[CURR_ANALOG_KEY] = new_x_value
+        self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
+        self.analog_values_x[CURR_ANALOG_KEY] = x_value
 
-
-
-
-
-
-
-        self.prev_prediction = prediction       # salves old prediction
 
         if debug_printing_controller:
-            print("Pred -> " + str(prediction))
-            print("Old Y -> " + str(f'{self.analog_values_y[OLD_ANALOG_KEY]:.2f}'))
-            print("New Y -> " + str(f'{self.analog_values_y[CURR_ANALOG_KEY]:.2f}'))
+            print("Pred Left -> " + str(pred_left) + ", Pred Right -> " + str(pred_right))
+            print("Y -> " + str(f'{self.analog_values_y[CURR_ANALOG_KEY]:.2f}'))
+            print("X -> " + str(f'{self.analog_values_x[CURR_ANALOG_KEY]:.2f}'))
             print("___________________________")
 
 
 
 
-
-    def get_y_axis(self):
-        return self.analog_values_y[CURR_ANALOG_KEY]
-
-    def get_x_axis(self):
-        return self.analog_values_x[CURR_ANALOG_KEY]
+    def reduce_speed(self):
+        y_value = self.get_y_axis()
+        y_value -= walking_decrement   # todo fix it later, maybe not walking
