@@ -7,6 +7,10 @@ import re
 import pickle
 import threading
 from config import *
+import asyncio
+from concurrent.futures.thread import ThreadPoolExecutor
+import concurrent.futures
+
 
 from scipy import signal
 import matplotlib.pyplot as plt
@@ -26,53 +30,65 @@ class MoverReceiver:
         self.reset_mov = False
         self.should_run_thread = False
 
-        self.id_master = 0
-        self.id_slave = 0
+        self.id_left = 0
+        self.id_right = 0
 
         self.has_connection_been_estabilished = False
-        self.main_mover, self.slave_mover = self.init_movers()
+        self.left_mov, self.right_mov = self.init_movers()
 
         self.controller = Controller()  # Set the controller
-        self.model = pickle.load(open('trained_models/model23.bin', 'rb'))  # Loading prediction model
 
-        self.main_prediction_list = []
-        self.slave_prediction_list = []
+        # Loading prediction models
+        self.model_left = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
+        self.model_right = pickle.load(open('trained_models/right/r_mod1.bin', 'rb'))
 
-        self.predictions = [-1, -1]
-        self.acc_values = [[-1, -1, -1], [-1, -1, -1]]
-        self.gyr_values = list()
+        self.current_x_l = 0
+        self.current_y_l = 0
+        self.current_z_l = 0
+        self.current_t_l = 0
 
-        self.raw_values_x = list()
-        self.raw_values_y = list()
-        self.raw_values_z = list()
+        self.current_x_r = 0
+        self.current_y_r = 0
+        self.current_z_r = 0
+        self.current_t_r = 0
+
 
         self.values_prediction_test = list()
         self.values_prediction = list()
+
+        self.x_list_l = []
+        self.y_list_l = []
+        self.z_list_l = []
+        self.x_list_r = []
+        self.y_list_r = []
+        self.z_list_r = []
+        self.t_list = []
+
 
         self.doing_prediction = False
         self.detected_movement = False
 
     def init_movers(self):
 
-        mov_master_tmp = None
-        mov_slave_tmp = None
+        left_mov_tmp = None
+        right_mov_tmp = None
         id_tmp = 0
 
-        while mov_master_tmp is None or mov_slave_tmp is None:
+        while left_mov_tmp is None or right_mov_tmp is None:
             try:
                 mov_tmp = serial.Serial('COM' + str(id_tmp), baudrate=115200, timeout=0.01)
                 ser_bytes_tmp = mov_tmp.readline()
                 decoded_bytes_tmp = ser_bytes_tmp.decode()
 
                 # todo rewrite this
-                if re.match('MASTER', decoded_bytes_tmp):
-                    mov_master_tmp = mov_tmp
+                if re.match('LEFT', decoded_bytes_tmp):
+                    left_mov_tmp = mov_tmp
                     # mov_master_tmp.write(b'c')
-                    self.id_master = id_tmp
-                if re.match('SLAVE', decoded_bytes_tmp):
-                    mov_slave_tmp = mov_tmp
+                    self.id_left = id_tmp
+                if re.match('RIGHT', decoded_bytes_tmp):
+                    right_mov_tmp = mov_tmp
                     # mov_master_tmp.write(b'c')
-                    self.id_slave = id_tmp
+                    self.id_right = id_tmp
 
 
             except SerialException:
@@ -82,30 +98,31 @@ class MoverReceiver:
             if id_tmp > 10:
                 break
 
-        if mov_master_tmp:
-            print("Connected Master -> COM" + str(self.id_master))
-            print("Connected Slave -> COM" + str(self.id_slave))
+        if left_mov_tmp and right_mov_tmp:
+            print("Connected L -> COM" + str(self.id_left))
+            print("Connected R -> COM" + str(self.id_right))
 
-            mov_master_tmp.flushInput()
+            left_mov_tmp.flushInput()
+            right_mov_tmp.flushInput()
 
             self.has_connection_been_estabilished = True
         else:
             print("Couldn't find the devices!")
             self.has_connection_been_estabilished = False
-            mov_master_tmp = None
-            mov_slave_tmp = None
+            left_mov_tmp = None
+            right_mov_tmp = None
 
-        return mov_master_tmp, mov_slave_tmp
+        return left_mov_tmp, right_mov_tmp
 
     def re_init_movers(self):
-        self.main_mover.write(b'r')
-        self.slave_mover.write(b'r')
+        self.left_mov.write(b'r')
+        self.right_mov.write(b'r')
 
         time.sleep(5)
-        self.main_mover.write(b'c')
-        self.slave_mover.write(b'c')
-        print("Resetted Master -> COM" + str(self.id_master))
-        print("Resetted Slave -> COM" + str(self.id_slave))
+        self.left_mov.write(b'c')
+        self.right_mov.write(b'c')
+        print("Resetted L -> COM" + str(self.id_left))
+        print("Resetted R -> COM" + str(self.id_right))
         self.reset_mov = False
 
     def initial_setup(self):
@@ -113,67 +130,10 @@ class MoverReceiver:
         print("------------MOVER MANAGER------------\n")
 
         print("Start")
-        self.main_mover.reset_input_buffer()
+        self.left_mov.reset_input_buffer()
+        self.right_mov.reset_input_buffer()
 
-
-    def read_decode_data(self):
-
-        def rdd_base(check=True):
-            is_done = False
-
-            while is_done is False:
-                try:
-                    self.main_mover.flushInput()
-
-                    # first reading. if it's considered "moving", then let's start the window to determine the type of movement
-                    acc_line = self.main_mover.readline()
-                    gyr_line = self.main_mover.readline()
-
-                    decoded_acc_line = acc_line.decode()
-                    decoded_gyr_line = gyr_line.decode()
-
-                    regex_search = re.findall('a,(\S*),(\S*),(\S*)', decoded_acc_line[:-2])[0]
-
-                    z_offset = 8000  # todo fix
-                    m_raw_x = float(regex_search[0]) / data_divider
-                    m_raw_y = float(regex_search[1]) / data_divider
-                    m_raw_z = float(int(regex_search[2]) - z_offset) / data_divider
-
-                    self.acc_values.append([m_raw_x, m_raw_y, m_raw_z])
-
-                    regex_search = re.findall('g,(\S*),(\S*),(\S*)', decoded_gyr_line[:-2])[0]
-                    m_gyr_y = float(regex_search[0])
-                    m_gyr_z = float(regex_search[1])
-
-                    # self.gyr_values.append([m_gyr_y, m_gyr_z])
-                    # self.gyr_values.append([s_gyr_y, s_gyr_z])
-
-                    is_done = True
-                    if check is False:
-                        self.values_prediction.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
-                        self.values_prediction_test.append([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z])
-
-                        # print([m_raw_x, m_raw_y, m_raw_z, m_gyr_y, m_gyr_z, current_time])
-
-                    else:
-                        return (abs(m_raw_x) + abs(m_raw_y) + abs(m_raw_z)) / 3  # as movement test
-
-                except Exception:
-                    pass
-
-        try:
-            '''PEAK DETECTION'''
-            mov_test = rdd_base()
-            if mov_test > 0.75:
-                # print("Detected movement!")
-                self.detected_movement = True
-                # start prediction stuff
-                while len(self.values_prediction) < 30:
-                    rdd_base(False)
-            else:
-                self.detected_movement = False
-        except (ValueError, IndexError) as e:
-            self.main_mover.flushInput()
+        # Start reading threads
 
     # Main operations
     def read_data(self):
@@ -181,119 +141,157 @@ class MoverReceiver:
 
         while is_done is False:
             try:
-                self.main_mover.flushInput()
-                line = self.main_mover.readline().decode()
-                regex_search = re.findall('m,(\S*),(\S*),(\S*)', line[:-2])[0]
-                x_m = float(regex_search[0])
-                y_m = float(regex_search[1])
-                z_m = float(regex_search[2]) - 8100  # not really precise but hey
 
-                line = self.main_mover.readline().decode()
-                regex_search = re.findall('s,(\S*),(\S*),(\S*)', line[:-2])[0]
-                x_s = float(regex_search[0])
-                y_s = float(regex_search[1])
-                z_s = float(regex_search[2]) - 8100  # not really precise but hey
+                self.left_mov.flushInput()
+                self.right_mov.flushInput()
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future_l = loop.run_in_executor(pool, self.read_single_mov, 'l')
+                    future_r = loop.run_in_executor(pool, self.read_single_mov, 'r')
 
-                line = self.main_mover.readline().decode()
-                regex_search = re.findall('(\S*)', line[:-2])[0]
-                sec = float(regex_search) / 1000
+                loop.run_until_complete(loop.shutdown_asyncgens())
 
-                return x_m, y_m, z_m, x_s, y_s, z_s, sec
+                (x_l, y_l, z_l, t_l) = future_l.result()
+                (x_r, y_r, z_r, t_r) = future_r.result()
+                return x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r
 
-            except Exception:
-                self.main_mover.flushInput()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            except Exception as e:
+                print(e)
+
+    def read_single_mov(self, mov_id):
+
+        try:
+            line = '\r\n'
+
+            if mov_id == 'l':
+                while line == '\r\n':
+                    line = self.left_mov.readline().decode()
+                regex_search = re.findall('l,(\S*),(\S*),(\S*),(\S*)', line[:-2])[0]
+            else:
+                while line == '\r\n':
+                    line = self.right_mov.readline().decode()
+                regex_search = re.findall('r,(\S*),(\S*),(\S*),(\S*)', line[:-2])[0]
+
+            x = float(regex_search[0])
+            y = float(regex_search[1])
+            z = float(regex_search[2]) - 8100  # not really precise but hey
+            t = float(regex_search[3]) / 1000
+        except Exception as e:
+            print(e)
+            x = 0
+            y = 0
+            z = 0
+            t = 0
+
+
+        return x, y, z, t
+
 
     def loop(self):
 
         while self.should_run_thread:
+
             try:
+
                 if self.reset_mov:
                     print("Resetting!")
                     time.sleep(3)
                     self.re_init_movers()
 
-                # Resets lists
-                self.acc_values = list()
-                self.gyr_values = list()
+                x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
 
-                # self.read_decode_data()
-                x_m, y_m, z_m, x_s, y_s, z_s, sec = self.read_data()
-
+                # Setup time
                 try:
                     if first_time == -1 or first_time is None:
-                        first_time = sec
+                        first_time = t_l
                 except Exception:
-                    self.main_mover.flushInput()
                     first_time = -1
                     continue
-
-                # print("First time: " + str(first_time))
-                # print("Current time: " + str(ms))
-
-                sec = sec - first_time  # convert it
-                #print("Corrected time: " + str(sec))
+                sec = t_l - first_time  # convert it
 
                 if sec > -1:
                     # Read until first second to make a frame
-                    try:
+                    self.x_list_l.append(x_l)
+                    self.y_list_l.append(y_l)
+                    self.z_list_l.append(z_l)
 
-                        x_list_m.append(x_m)
-                        y_list_m.append(y_m)
-                        z_list_m.append(z_m)
+                    self.x_list_r.append(x_r)
+                    self.y_list_r.append(y_r)
+                    self.z_list_r.append(z_r)
 
-                        x_list_s.append(x_s)
-                        y_list_s.append(y_s)
-                        z_list_s.append(z_s)
+                    self.t_list.append(sec)
 
-                        t_list.append(sec)
-                    except UnboundLocalError:
-                        x_list_m = []
-                        y_list_m = []
-                        z_list_m = []
-                        x_list_s = []
-                        y_list_s = []
-                        z_list_s = []
-                        t_list = []
 
-                '''try:
-                    if abs(mean(x_list_m)) < 200:
-                        for single_list in [x_list_m, y_list_m, z_list_m, x_list_s, y_list_s, z_list_s]:
-                           single_list.clear()  # clean everything
+                # Really basic movement detection routine
+
+
+                '''
+                try:
+
+                    mean_x_l = abs(mean(self.x_list_l))
+                    mean_x_r = abs(mean(self.x_list_r))
+                    #print("mean left: " + str(mean_x_l))
+                    #print("mean right: " + str(mean_x_r))
+
+                
+
+                    if mean_x_l < 10 or mean_x_r < 10:
+                        for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r]:
+                           single_list.clear()
 
                         first_time = -1
+                        continue
                 except statistics.StatisticsError:
-                    pass
-
+                    # Could be empty, in this case don't do anything and just wait
                     first_time = -1
-'''
+                '''
 
+                #print(len(self.x_list_s))
                 #203 because of the three values going missing after filtering.
-                if len(x_list_m) > 203:
-                    print("new frame with " + str(len(x_list_m)) + " values")
+                if len(self.x_list_l) > 203 or len(self.x_list_r) > 203:
+                    #print("new frame with " + str(len(self.x_list_l)) + " values")
                     # all_frames.append(current_frame)
-                    current_frame_m = (x_list_m, y_list_m, z_list_m)
-                    current_frame_s = (x_list_s, y_list_s, z_list_s)
-                    filtered_frame_m = filtering_pass(current_frame_m)
-                    filtered_frame_s = filtering_pass(current_frame_s)
-                    for single_list in [x_list_m, y_list_m, z_list_m, x_list_s, y_list_s, z_list_s]:
-                        single_list.clear()
-                    t_list = []
-                    first_time = -1  # reset frame time
-                    tuple_list.append(filtered_frame_m)
+                    current_frame_l = (self.x_list_l, self.y_list_l, self.z_list_l)
+                    current_frame_r = (self.x_list_r, self.y_list_r, self.z_list_r)
+                    filtered_frame_l = filtering_pass(current_frame_l)
+                    filtered_frame_r = filtering_pass(current_frame_r)
 
-                    ## PREDICTION
+
+                    # PREDICTION
                     self.doing_prediction = True
-                    prediction_m = self.model.predict(np.array(filtered_frame_m).reshape(1, -1))
-                    prediction_s = self.model.predict(np.array(filtered_frame_s).reshape(1, -1))
-                    self.values_prediction = []
+                    prediction_l = self.model_left.predict(np.array(filtered_frame_l).reshape(1, -1))
+                    prediction_r = self.model_right.predict(np.array(filtered_frame_r).reshape(1, -1))
                     self.doing_prediction = False
-                    self.controller.manage_predictions(prediction_m, prediction_s)      #left, right
 
+                    print(str(prediction_l) + ", " + str(prediction_r))
+                    #self.controller.manage_predictions(prediction_l, prediction_r)      #left, right
+
+
+
+                    # CLEANING
+                    for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r]:
+                        single_list.clear()
+                    self.t_list = []
+                    first_time = -1  # reset frame time
+                    #tuple_list.append(filtered_frame_r)
+
+            except TypeError as e:
+                print(e)
+                # CLEANING
+                for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
+                                    self.z_list_r]:
+                    single_list.clear()
+                self.t_list = []
+                first_time = -1  # reset frame time
+                # tuple_list.append(filtered_frame_r)
             except SerialException:
                 print("Mover disconnected! Retrying initialization")
-                self.main_mover = None
-                self.slave_mover = None
-                while self.main_mover is None or self.slave_mover is None:
+                self.left_mov = None
+                self.right_mov = None
+                while self.left_mov is None or self.right_mov is None:
                     self.init_movers()
                 self.reset_mov = True
 
@@ -309,18 +307,14 @@ class MoverReceiver:
         if self.should_run_thread:
             print("Stopping loop...")
             self.should_run_thread = False
-            self.main_mover.flushInput()  # To stop completely
+            self.left_mov.flushInput()  # To stop completely
+            self.right_mov.flushInput()  # To stop completely
+
         else:
             print("It's not running right now!")
 
     def set_reset_mov(self, var):
         self.reset_mov = var
-
-    def get_current_prediction(self):
-        if self.doing_prediction:
-            return None
-
-        return self.predictions
 
     def get_current_acceleration(self):
 
@@ -421,6 +415,8 @@ class GUI:
         else:
             self.reset_button.config(fg='black')
 
+        '''
+
         controller_values = self.mover.controller.get_y_axis()
         controller_string = 'tmp'
 
@@ -444,8 +440,8 @@ class GUI:
             controller_string = '--------->'
         if 0.9 < controller_values <= 1.5:  # includes a little bit of float error
             controller_string = '---------->'
-
-        self.controller_label['text'] = controller_string
+        
+        #self.controller_label['text'] = controller_string
 
         try:
             acc_values = self.mover.get_current_acceleration()
@@ -457,13 +453,13 @@ class GUI:
 
         except IndexError:
             pass
-
+        '''
         try:
+            pass
+            #preds = self.mover.get_current_prediction()
 
-            preds = self.mover.get_current_prediction()
-
-            self.prediction_label_m['text'] = preds[0]
-            self.prediction_label_s['text'] = preds[1]
+            #self.prediction_label_m['text'] = preds[0]
+            #self.prediction_label_s['text'] = preds[1]
         except (IndexError, TypeError):
             pass
             # print("Error during prediction printing")
@@ -581,13 +577,6 @@ class GUI:
 # Startup
 # TODO better startup
 first_time = None
-x_list_m = []
-y_list_m = []
-z_list_m = []
-x_list_s = []
-y_list_s = []
-z_list_s = []
-t_list = []
 x_filtered_list = []
 x_full_list = []
 y_full_list = []
