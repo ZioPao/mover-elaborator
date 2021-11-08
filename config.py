@@ -35,6 +35,10 @@ walking_increment = float(config['Movement']['walking_increment'])
 walking_decrement = float(config['Movement']['walking_decrement'])
 walking_top = float(config['Movement']['walking_top'])
 
+side_increment = float(config['Movement']['side_increment'])
+side_decrement = float(config['Movement']['side_decrement'])
+side_top = float(config['Movement']['side_top'])
+
 stopped_decrement = float(config['Movement']['stopped_decrement'])
 stopped_min = float(config['Movement']['stopped_min'])
 stopped_range = float(config['Movement']['stopped_range'])

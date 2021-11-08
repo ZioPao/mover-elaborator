@@ -27,13 +27,14 @@ class Controller:
 
         self.prev_prediction = None
 
-    def get_new_analog_values(self, increment, decrease, top_value, ):
-        if self.analog_values_y[OLD_ANALOG_KEY] < top_value:
-            new_y_value = self.analog_values_y[OLD_ANALOG_KEY] + increment
+    def get_new_analog_values(self, array, increment, decrease, top_value):
+        if array[OLD_ANALOG_KEY] < top_value:
+            new_y_value = array[OLD_ANALOG_KEY] + increment
         else:
-            new_y_value = self.analog_values_y[OLD_ANALOG_KEY] - decrease
+            new_y_value = array[OLD_ANALOG_KEY] - decrease
 
         return new_y_value
+
 
     def manage_predictions(self, pred_left, pred_right):
         y_value = 0
@@ -41,15 +42,25 @@ class Controller:
 
         # WALK MOVEMENT
         if pred_left == 0. and pred_right == 0.:
-            y_value = 0 if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range else self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
+            y_value = 0 if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range else \
+                self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
 
         # RUN MOVEMENT
-        if pred_left == 1. and pred_right == 1.:
-            y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
+        # or because we only need one leg to sprint or something
+        if pred_left == 1. or pred_right == 1.:
+            y_value = self.get_new_analog_values(self.analog_values_y,
+                                                 walking_increment, walking_decrement, walking_top)
 
         # SIDE MOVEMENT
-        x_value = -1 if pred_left == 2. else 1 if pred_right == 3 else 0
-        # todo maybe less speedy
+        if pred_left == 2. or pred_right == 2.:
+            if self.analog_values_x[OLD_ANALOG_KEY] != 0:
+                x_value = self.get_new_analog_values(self.analog_values_x,
+                                                     side_increment, side_decrement, side_top)
+
+                if pred_left == 2.:
+                    x_value = -x_value      # left
+            else:
+                x_value = -0.1 if pred_left == 2. else 0.1      # small steps?
 
         # Finally applies the y_value to the controller
         y_value = y_value if y_value > 0. else 0.
@@ -64,7 +75,6 @@ class Controller:
 
         self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
         self.analog_values_x[CURR_ANALOG_KEY] = x_value
-
 
         if debug_printing_controller:
             print("Pred Left -> " + str(pred_left) + ", Pred Right -> " + str(pred_right))

@@ -11,7 +11,7 @@ import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 import concurrent.futures
 
-
+import math
 from scipy import signal
 import matplotlib.pyplot as plt
 import numpy as np
@@ -159,7 +159,8 @@ class MoverReceiver:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
             except Exception as e:
-                print(e)
+                #print(e)
+                pass
 
     def read_single_mov(self, mov_id):
 
@@ -189,7 +190,6 @@ class MoverReceiver:
 
         return x, y, z, t
 
-
     def loop(self):
 
         while self.should_run_thread:
@@ -202,6 +202,10 @@ class MoverReceiver:
                     self.re_init_movers()
 
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
+
+
+                #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
+                #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
 
                 # Setup time
                 try:
@@ -227,19 +231,32 @@ class MoverReceiver:
 
                 # Really basic movement detection routine
 
+                mean_x_l = abs(mean(self.x_list_l))
+                mean_y_l = abs(mean(self.y_list_l))
+                mean_z_l = abs(mean(self.z_list_l))
+                mean_l = mean((mean_x_l, mean_y_l, mean_z_l))
 
-                '''
+                mean_x_r = abs(mean(self.x_list_r))
+                mean_y_r = abs(mean(self.y_list_r))
+                mean_z_r = abs(mean(self.z_list_r))
+                mean_r = mean((mean_x_r, mean_y_r, mean_z_r))
+                #math.log(x) - 2.3
+                #print(math.log(mean_l))
+
+
+                #run speed managament
                 try:
+                    #print(str(math.log(math.log(mean_l)) - 1.2))
+                    #speed_mod = math.log(mean_l)
+                    #print(speed_mod)
+                    pass
+                except ValueError:
+                    pass
 
-                    mean_x_l = abs(mean(self.x_list_l))
-                    mean_x_r = abs(mean(self.x_list_r))
-                    #print("mean left: " + str(mean_x_l))
-                    #print("mean right: " + str(mean_x_r))
-
-                
-
-                    if mean_x_l < 10 or mean_x_r < 10:
-                        for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r]:
+                try:
+                    if mean_l < 30 or mean_r < 30:
+                        for single_list in [self.x_list_l, self.y_list_l, self.z_list_l,
+                                            self.x_list_r, self.y_list_r, self.z_list_r]:
                            single_list.clear()
 
                         first_time = -1
@@ -247,9 +264,7 @@ class MoverReceiver:
                 except statistics.StatisticsError:
                     # Could be empty, in this case don't do anything and just wait
                     first_time = -1
-                '''
 
-                #print(len(self.x_list_s))
                 #203 because of the three values going missing after filtering.
                 if len(self.x_list_l) > 203 or len(self.x_list_r) > 203:
                     #print("new frame with " + str(len(self.x_list_l)) + " values")
@@ -267,7 +282,7 @@ class MoverReceiver:
                     self.doing_prediction = False
 
                     print(str(prediction_l) + ", " + str(prediction_r))
-                    #self.controller.manage_predictions(prediction_l, prediction_r)      #left, right
+                    self.controller.manage_predictions(prediction_l, prediction_r)      #left, right
 
 
 
@@ -317,7 +332,6 @@ class MoverReceiver:
         self.reset_mov = var
 
     def get_current_acceleration(self):
-
         return self.acc_values
 
 
