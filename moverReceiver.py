@@ -64,6 +64,9 @@ class MoverReceiver:
         self.z_list_r = []
         self.t_list = []
 
+        self.prediction_l = -1
+        self.prediction_r = -1
+
 
         self.doing_prediction = False
         self.detected_movement = False
@@ -277,12 +280,12 @@ class MoverReceiver:
 
                     # PREDICTION
                     self.doing_prediction = True
-                    prediction_l = self.model_left.predict(np.array(filtered_frame_l).reshape(1, -1))
-                    prediction_r = self.model_right.predict(np.array(filtered_frame_r).reshape(1, -1))
+                    self.prediction_l = self.model_left.predict(np.array(filtered_frame_l).reshape(1, -1))
+                    self.prediction_r = self.model_right.predict(np.array(filtered_frame_r).reshape(1, -1))
                     self.doing_prediction = False
 
-                    print(str(prediction_l) + ", " + str(prediction_r))
-                    self.controller.manage_predictions(prediction_l, prediction_r)      #left, right
+                    print(str(self.prediction_l) + ", " + str(self.prediction_r))
+                    self.controller.manage_predictions(self.prediction_l, self.prediction_r)      #left, right
 
 
 
@@ -330,9 +333,6 @@ class MoverReceiver:
 
     def set_reset_mov(self, var):
         self.reset_mov = var
-
-    def get_current_acceleration(self):
-        return self.acc_values
 
 
 class GUI:
@@ -403,13 +403,13 @@ class GUI:
             self.prediction_frame.pack(side=tk.BOTTOM, anchor=tk.E)
 
             self.prediction_label_main = tk.Label(self.prediction_frame, text='Predictions: ')
-            self.prediction_label_m = tk.Label(self.prediction_frame, text='tmp')
-            self.prediction_label_s = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_l = tk.Label(self.prediction_frame, text='tmp')
+            self.prediction_label_r = tk.Label(self.prediction_frame, text='tmp')
             self.prediction_label_main.pack(side=tk.LEFT)
-            self.prediction_label_m.config(fg='red')
-            self.prediction_label_m.pack(side=tk.LEFT)
-            self.prediction_label_s.config(fg='red')
-            self.prediction_label_s.pack(side=tk.LEFT)
+            self.prediction_label_l.config(fg='red')
+            self.prediction_label_l.pack(side=tk.LEFT)
+            self.prediction_label_r.config(fg='red')
+            self.prediction_label_r.pack(side=tk.LEFT)
 
             self.update_values()
         else:
@@ -429,9 +429,9 @@ class GUI:
         else:
             self.reset_button.config(fg='black')
 
-        '''
 
-        controller_values = self.mover.controller.get_y_axis()
+
+        controller_values = self.mover.controller.analog_values_y['current']
         controller_string = 'tmp'
 
         if -0.2 < controller_values <= 0.1:
@@ -454,9 +454,10 @@ class GUI:
             controller_string = '--------->'
         if 0.9 < controller_values <= 1.5:  # includes a little bit of float error
             controller_string = '---------->'
-        
-        #self.controller_label['text'] = controller_string
 
+        self.controller_label['text'] = controller_string
+
+        '''
         try:
             acc_values = self.mover.get_current_acceleration()
 
@@ -468,15 +469,15 @@ class GUI:
         except IndexError:
             pass
         '''
+
         try:
             pass
-            #preds = self.mover.get_current_prediction()
 
-            #self.prediction_label_m['text'] = preds[0]
-            #self.prediction_label_s['text'] = preds[1]
+            self.prediction_label_l['text'] = self.mover.prediction_l[0]
+            self.prediction_label_r['text'] = self.mover.prediction_r[0]
         except (IndexError, TypeError):
             pass
-            # print("Error during prediction printing")
+            print("Error during prediction printing")
 
         self.prediction_label_main.after(1, self.update_values)
 
