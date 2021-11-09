@@ -25,13 +25,16 @@ class Controller:
         self.analog_values_y = {'old': 0, 'current': 0}
         self.analog_values_x = {'old': 0, 'current': 0}
 
-        self.prev_prediction = None
 
-    def get_new_analog_values(self, array, increment, decrease, top_value):
-        if array[OLD_ANALOG_KEY] < top_value:
+
+        self.prev_prediction_l = None
+        self.prev_prediction_r = None
+
+    def get_new_analog_values(self, array, increment, top_value):
+        if array[OLD_ANALOG_KEY] <= top_value:
             new_y_value = array[OLD_ANALOG_KEY] + increment
         else:
-            new_y_value = array[OLD_ANALOG_KEY] - decrease
+            new_y_value = array[OLD_ANALOG_KEY]     # current
 
         return new_y_value
 
@@ -42,20 +45,23 @@ class Controller:
 
         # WALK MOVEMENT
         if pred_left == 0. and pred_right == 0.:
-            y_value = 0 if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range else \
-                self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
+            y_value = self.get_new_analog_values(self.analog_values_y,
+                                                 walking_increment, walking_top)
+
+            #y_value = 0 if -0.1 < self.analog_values_y[OLD_ANALOG_KEY] < stopped_range else \
+            #    self.analog_values_y[OLD_ANALOG_KEY] - stopped_decrement
 
         # RUN MOVEMENT
         # or because we only need one leg to sprint or something
         if pred_left == 1. or pred_right == 1.:
             y_value = self.get_new_analog_values(self.analog_values_y,
-                                                 walking_increment, walking_decrement, walking_top)
+                                                 jogging_increment, jogging_top)
 
         # SIDE MOVEMENT
         if pred_left == 2. or pred_right == 2.:
             if self.analog_values_x[OLD_ANALOG_KEY] != 0:
                 x_value = self.get_new_analog_values(self.analog_values_x,
-                                                     side_increment, side_decrement, side_top)
+                                                     side_increment, side_top)
 
                 if pred_left == 2.:
                     x_value = -x_value      # left
@@ -76,15 +82,47 @@ class Controller:
         self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
         self.analog_values_x[CURR_ANALOG_KEY] = x_value
 
+        self.prev_prediction_l = pred_left
+        self.prev_prediction_r = pred_right
+
         if debug_printing_controller:
             print("Pred Left -> " + str(pred_left) + ", Pred Right -> " + str(pred_right))
-            print("Y -> " + str(f'{self.analog_values_y[CURR_ANALOG_KEY]:.2f}'))
-            print("X -> " + str(f'{self.analog_values_x[CURR_ANALOG_KEY]:.2f}'))
+            print("Y -> " + str(f'{self.analog_values_y[CURR_ANALOG_KEY]:.4f}'))
+            print("X -> " + str(f'{self.analog_values_x[CURR_ANALOG_KEY]:.4f}'))
             print("___________________________")
 
+    def decrease_speed(self):
+        # STOPPING
+        y_value = self.analog_values_y[CURR_ANALOG_KEY]
+        x_value = self.analog_values_x[CURR_ANALOG_KEY]
 
+        if self.prev_prediction_l == 0:
+            if y_value >= walking_top:
+                y_value = walking_top
+            y_value = y_value - walking_decrement
+        if self.prev_prediction_l == 1:
+            if y_value >= jogging_top:
+                y_value = jogging_top
+            y_value = y_value - jogging_decrement
+        if self.prev_prediction_l == 2:
+            if x_value >= side_top:
+                x_value = y_value - side_decrement
 
+        if y_value < 0:
+            y_value = 0
 
-    def reduce_speed(self):
-        y_value = self.get_y_axis()
-        y_value -= walking_decrement   # todo fix it later, maybe not walking
+        self.controller.set_value(LEFT_AXIS_Y, y_value)
+        self.analog_values_y[OLD_ANALOG_KEY] = self.analog_values_y[CURR_ANALOG_KEY]
+        self.analog_values_y[CURR_ANALOG_KEY] = y_value
+
+        if debug_printing_controller:
+            print("Pred Left -> " + str(-1) + ", Pred Right -> " + str(-1))
+            print("Y -> " + str(f'{self.analog_values_y[CURR_ANALOG_KEY]:.4f}'))
+            print("X -> " + str(f'{self.analog_values_x[CURR_ANALOG_KEY]:.4f}'))
+            print("___________________________")
+        #self.controller.set_value(LEFT_AXIS_X, x_value)
+
+        # back them up
+
+        #self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
+        #self.analog_values_x[CURR_ANALOG_KEY] = x_value

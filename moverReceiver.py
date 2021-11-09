@@ -287,17 +287,18 @@ class MoverReceiver:
                     print(str(self.prediction_l) + ", " + str(self.prediction_r))
                     self.controller.manage_predictions(self.prediction_l, self.prediction_r)      #left, right
 
-
-
                     # CLEANING
-                    for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r]:
+                    for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
+                                        self.z_list_r]:
                         single_list.clear()
                     self.t_list = []
                     first_time = -1  # reset frame time
-                    #tuple_list.append(filtered_frame_r)
+                    # tuple_list.append(filtered_frame_r)
+
+                else:
+                    self.controller.decrease_speed()
 
             except TypeError as e:
-                print(e)
                 # CLEANING
                 for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
                                     self.z_list_r]:
@@ -477,7 +478,7 @@ class GUI:
             self.prediction_label_r['text'] = self.mover.prediction_r[0]
         except (IndexError, TypeError):
             pass
-            print("Error during prediction printing")
+            #print("Error during prediction printing")
 
         self.prediction_label_main.after(1, self.update_values)
 
