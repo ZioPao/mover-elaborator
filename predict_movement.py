@@ -5,14 +5,13 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 
-## LEFT PREDICTION STUFF
-walk_X = pickle.load(open('datasets_to_compile/prediction_list_walk_left.bin', 'rb'))
+walk_X = pickle.load(open('datasets_to_compile/walk.bin', 'rb'))
 walk_X = np.array(walk_X)
 n_samples, nx, ny = walk_X.shape
 walk_X_r = walk_X.reshape((n_samples, nx*ny))
 walk_y = np.zeros(n_samples)
 
-run_X = pickle.load(open('datasets_to_compile/prediction_list_run_left.bin', 'rb'))
+run_X = pickle.load(open('datasets_to_compile/run.bin', 'rb'))
 run_X = np.array(run_X)
 n_samples, nx, ny = run_X.shape
 run_X_r = run_X.reshape((n_samples, nx*ny))
@@ -103,13 +102,13 @@ plt.show()
 print(accuracy_score(y_test, y_pred))
 
 
-pickle.dump(clf, open('trained_models/model23.bin', 'wb'))
+pickle.dump(clf, open('trained_models/old/model23.bin', 'wb'))
 
 
 # when crouching it should count as walking\running
 # not finding correctly when going down while walking
 
-pickle.dump(tuple_list, open('datasets_to_compile/prediction_list_run3.bin', 'wb'))
+pickle.dump(all_frames, open('datasets_to_compile/prediction_list_run3.bin', 'wb'))
 
 
 # DOCS

@@ -1,19 +1,14 @@
 import statistics
 import serial
+import serial.tools.list_ports
 from serial import SerialException
 import tkinter as tk
 import re
 import pickle
 from config import *
 import asyncio
-from concurrent.futures.thread import ThreadPoolExecutor
-import concurrent.futures
-import math
-from scipy import signal
-import matplotlib.pyplot as plt
-import numpy as np
-from statistics import mean
 from controller_module import Controller
+import numpy as np
 from filtering import filtering_pass
 
 
@@ -35,8 +30,8 @@ class MoverReceiver:
         self.controller = Controller()  # Set the controller
 
         # Loading prediction models
-        self.model_left = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
-        self.model_right = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod.bin', 'rb'))
+        #self.model_right = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
 
         self.current_x_l = 0
         self.current_y_l = 0
@@ -78,7 +73,6 @@ class MoverReceiver:
         right_id ='8&29C54EA8&0&1'        # right
         left_id = '8&29C54EA8&0&2'        # left
 
-        import serial.tools.list_ports
         ports = serial.tools.list_ports.comports()
         for p in ports:
 
@@ -186,48 +180,64 @@ class MoverReceiver:
                 #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
                 #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
 
-                # Setup time
-                try:
-                    if first_time == -1 or first_time is None:
-                        first_time = t_l
-                except Exception:
-                    first_time = -1
-                    continue
-                sec = t_l - first_time  # convert it
 
-                if sec > -1:
-                    # Read until first second to make a frame
-                    self.x_list_l.append(x_l)
-                    self.y_list_l.append(y_l)
-                    self.z_list_l.append(z_l)
+                zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
+                is_valid = np.all((zero_check != 0.))
 
-                    self.x_list_r.append(x_r)
-                    self.y_list_r.append(y_r)
-                    self.z_list_r.append(z_r)
+                if is_valid:
+                    # Setup time
+                    try:
+                        if first_time == -1 or first_time is None:
+                            first_time = t_l
+                    except Exception:
+                        first_time = -1
+                        continue
+                    sec = t_l - first_time  # convert it
 
-                    self.t_list.append(sec)
+                    if sec > -1:
+                        # Read until first second to make a frame
+                        self.x_list_l.append(x_l)
+                        self.y_list_l.append(y_l)
+                        self.z_list_l.append(z_l)
 
-                #run speed managament
-                try:
-                    #print(str(math.log(math.log(mean_l)) - 1.2))
-                    #speed_mod = math.log(mean_l)
-                    #print(speed_mod)
-                    pass
-                except ValueError:
-                    pass
+                        self.x_list_r.append(x_r)
+                        self.y_list_r.append(y_r)
+                        self.z_list_r.append(z_r)
+
+                        self.t_list.append(sec)
+
+                    # sample size of 50 elements... 25 per sensor?
+                    if len(self.x_list_l) > 25 and len(self.x_list_r) > 25:
+                        print("Prediction")
+                        frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r)
 
 
-                if sec > 1:
-                    print(len(self.x_list_r))
-                    for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
-                                        self.z_list_r]:
-                        single_list.clear()
-                    # CLEANING
+                        ##############################################
+                        #all_frames.append(frame)        # should work?
+                        #if len(all_frames) > 50:
+                        #    print("STOP")
+                        ############################
 
-                    self.t_list = []
-                    first_time = -1  # reset frame time
-                    # tuple_list.append(filtered_frame_r)
-            except TypeError as e:
+                        # PREDICTION
+                        self.doing_prediction = True
+                        self.prediction = self.model.predict(np.array(frame).reshape(1, -1))
+                        print(self.prediction)
+                        #time.sleep(0.1)     # todo let's assume that this is 100 ms
+                        self.doing_prediction = False
+
+
+                        self.x_list_l = []
+                        self.y_list_l = []
+                        self.z_list_l = []
+                        self.x_list_r = []
+                        self.y_list_r = []
+                        self.z_list_r = []
+
+
+                        self.t_list = []
+                        first_time = -1  # reset frame time
+
+            except TypeError:
                 # CLEANING
                 for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
                                     self.z_list_r]:
