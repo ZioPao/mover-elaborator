@@ -82,8 +82,8 @@ class MoverReceiver:
                 left_mov_tmp = serial.Serial(p.device, baudrate=38400, timeout=0.01)
 
         if right_mov_tmp is not None and left_mov_tmp is not None:
-            print("Connected L -> COM" + str(self.id_left))
-            print("Connected R -> COM" + str(self.id_right))
+            print("Connected L -> " + str(left_mov_tmp.name))
+            print("Connected R -> " + str(right_mov_tmp.name))
 
             left_mov_tmp.flushInput()
             right_mov_tmp.flushInput()
@@ -177,8 +177,8 @@ class MoverReceiver:
                     self.re_init_movers()
 
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
-                #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
-                #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
+                print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
+                print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
 
 
                 zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
@@ -213,16 +213,16 @@ class MoverReceiver:
 
 
                         ##############################################
-                        #all_frames.append(frame)        # should work?
-                        #if len(all_frames) > 50:
-                        #    print("STOP")
+                        all_frames.append(frame)        # should work?
+                        if len(all_frames) > 50:
+                            print("STOP")
                         ############################
 
                         # PREDICTION
                         self.doing_prediction = True
-                        self.prediction = self.model.predict(np.array(frame).reshape(1, -1))
-                        print(self.prediction)
-                        #time.sleep(0.1)     # todo let's assume that this is 100 ms
+                        #self.prediction = self.model.predict(np.array(frame).reshape(1, -1))
+                        #print(self.prediction)
+                        time.sleep(0.1)     # todo let's assume that this is 100 ms
                         self.doing_prediction = False
 
 
