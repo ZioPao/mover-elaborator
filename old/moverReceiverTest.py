@@ -38,7 +38,7 @@ class MoverReceiver:
         self.controller = Controller()  # Set the controller
 
         # Loading prediction models
-        self.model_left = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
+        self.model_left = pickle.load(open('../trained_models/left/l_mod1.bin', 'rb'))
         self.model_right = pickle.load(open('trained_models/right/r_mod2.bin', 'rb'))
 
         self.current_x_l = 0
@@ -552,7 +552,7 @@ class GUI:
         config['Data']['data_divider'] = e1.get()
         config['Debug']['debug_printing_receiver'] = str(c1.get())
 
-        with open('settings.ini', 'w') as configfile:  # save
+        with open('../settings.ini', 'w') as configfile:  # save
             config.write(configfile)
 
         self.config_window.destroy()

@@ -498,6 +498,11 @@ tuple_list = []
 mov = MoverReceiver()
 gui = GUI(mov)
 
+
+
+
+
+
 #import matplotlib.pyplot as plt
 #plt.plot()
 #plt.scatter(mov.x_plot_list, mov.y_plot_list)
