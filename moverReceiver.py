@@ -1,4 +1,3 @@
-import statistics
 import serial
 import serial.tools.list_ports
 from serial import SerialException
@@ -9,7 +8,6 @@ from config import *
 import asyncio
 from controller_module import Controller
 import numpy as np
-from filtering import filtering_pass
 
 
 class MoverReceiver:
@@ -27,25 +25,11 @@ class MoverReceiver:
         self.has_connection_been_estabilished = False
         self.left_mov, self.right_mov = self.init_movers()
 
-        self.controller = Controller()  # Set the controller
+        self.controller = Controller()  # Setup the controller
 
-        # Loading prediction models
-        self.model = pickle.load(open('trained_models/mod3.bin', 'rb'))
-
-        self.current_x_l = 0
-        self.current_y_l = 0
-        self.current_z_l = 0
-        self.current_t_l = 0
-
-        self.current_x_r = 0
-        self.current_y_r = 0
-        self.current_z_r = 0
-        self.current_t_r = 0
-
-
-        self.values_prediction_test = list()
-        self.values_prediction = list()
-
+        self.model = pickle.load(open('trained_models/mod4.bin', 'rb'))
+        self.prediction = -1
+        self.pred_list = []
         self.x_list_l = []
         self.y_list_l = []
         self.z_list_l = []
@@ -54,20 +38,14 @@ class MoverReceiver:
         self.z_list_r = []
         self.t_list = []
 
-        self.prediction_l = -1
-        self.prediction_r = -1
-
-
-        self.x_plot_list = []
-        self.y_plot_list = []
 
     def init_movers(self):
 
         left_mov_tmp = None
         right_mov_tmp = None
 
-        right_id ='8&29C54EA8&0&2'        # right
-        left_id = '8&29C54EA8&0&1'        # left
+        right_id = '8&29C54EA8&0&2'  # right
+        left_id = '8&29C54EA8&0&1'  # left
 
         ports = serial.tools.list_ports.comports()
         for p in ports:
@@ -94,10 +72,11 @@ class MoverReceiver:
         return left_mov_tmp, right_mov_tmp
 
     def re_init_movers(self):
+        #todo currently broken
         self.left_mov.write(b'r')
         self.right_mov.write(b'r')
 
-        time.sleep(5)
+        time.sleep(2)
         self.left_mov.write(b'c')
         self.right_mov.write(b'c')
         print("Resetted L -> COM" + str(self.id_left))
@@ -117,7 +96,6 @@ class MoverReceiver:
     # Main operations
     def read_data(self):
         is_done = False
-
         while is_done is False:
             try:
 
@@ -131,11 +109,8 @@ class MoverReceiver:
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            except Exception:
-                pass
 
     def read_single_mov(self, mov_id):
-
         try:
             line = '\r\n'
 
@@ -162,15 +137,15 @@ class MoverReceiver:
 
     def loop(self):
         while self.should_run_thread:
-
             try:
                 if self.reset_mov:
                     print("Resetting!")
-                    time.sleep(3)
+                    time.sleep(1)
                     self.re_init_movers()
 
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
                 zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
+
                 # check if every value is not 0
                 if np.all((zero_check != 0.)):
                     # Setup time
@@ -195,16 +170,17 @@ class MoverReceiver:
                         self.t_list.append(sec)
 
                     # sample size of 50 elements... 25 per sensor?
-                    if len(self.x_list_l) > 25 and len(self.x_list_r) > 25:
+                    if len(self.x_list_l) > 50 and len(self.x_list_r) > 50:
 
-                        frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r)
+                        frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r,
+                                 self.y_list_r, self.z_list_r)
                         ##############################################
                         #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
                         #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
                         #all_frames.append(frame)        # should work?
                         #time.sleep(0.1)     # todo let's assume that this is 100 ms, prediction
-                        #if len(all_frames) > 50:
-                        #     print("STOP")
+                        #if len(all_frames) > 100:
+                        #    print("STOP")
                         ############################
                         self.prediction = self.model.predict_proba(np.array(frame).reshape(1, -1))
 
@@ -219,15 +195,18 @@ class MoverReceiver:
 
                         best_pred_probability = np.amax(self.prediction)
 
-
-
                         if best_pred_probability > 0.75:
                             best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
-                            print(best_pred)
                             self.controller.manage_prediction(best_pred)
+
+                            #self.pred_list.append(best_pred)
                         else:
                             self.controller.decrease_speed()
-                            continue
+
+                        #if len(self.pred_list) > 5:
+                        #    chosen_pred = np.bincount(self.pred_list).argmax()
+                        #    print(chosen_pred)
+                        #    self.controller.manage_prediction(chosen_pred)
                 else:
                     self.controller.decrease_speed()
 
@@ -238,8 +217,9 @@ class MoverReceiver:
                     single_list.clear()
                 self.t_list = []
                 first_time = -1  # reset frame time
-                # tuple_list.append(filtered_frame_r)
+
             except SerialException:
+                #todo can't trigger it anymore, fix it
                 print("Mover disconnected! Retrying initialization")
                 self.left_mov = None
                 self.right_mov = None
@@ -369,16 +349,6 @@ class GUI:
         self.controller_label_y['text'] = self.mover.controller.analog_values_y['current']
         self.controller_label_x['text'] = self.mover.controller.analog_values_x['current']
 
-        try:
-            pass
-            if self.mover.prediction_l[0] != -1:
-                self.prediction_label_l['text'] = str(self.mover.prediction_l[0])
-            if self.mover.prediction_r[0] != -1:
-                self.prediction_label_r['text'] = str(self.mover.prediction_r[0])
-        except (IndexError, TypeError):
-            pass
-            #print("Error during prediction printing")
-
         self.prediction_label_main.after(1, self.update_values)
 
     def retry_connection(self):
@@ -408,8 +378,11 @@ class GUI:
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
             self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-            self.controller_label = tk.Label(self.controller_frame, text="")
-            self.controller_label.pack()
+            self.controller_label_y = tk.Label(self.controller_frame, text="")
+            self.controller_label_y.pack()
+
+            self.controller_label_x = tk.Label(self.controller_frame, text="")
+            self.controller_label_x.pack()
 
             self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
             self.label_frame_main.config(bg='white')
@@ -498,16 +471,10 @@ tuple_list = []
 mov = MoverReceiver()
 gui = GUI(mov)
 
-
-
-
-
-
-#import matplotlib.pyplot as plt
-#plt.plot()
-#plt.scatter(mov.x_plot_list, mov.y_plot_list)
-#plt.show()
-
+# import matplotlib.pyplot as plt
+# plt.plot()
+# plt.scatter(mov.x_plot_list, mov.y_plot_list)
+# plt.show()
 '''
 ################################################################################################
 for x in all_frames:
@@ -702,4 +669,3 @@ s = time.time()
 filtering(frame)
 e = time.time()
 print(str(e - s))'''
-
