@@ -62,7 +62,7 @@ plt.xlabel('Predicted label')
 plt.show()
 print(accuracy_score(y_test, y_pred))
 
-pickle.dump(clf, open('trained_models/mod3.bin', 'wb'))
+pickle.dump(clf, open('trained_models/mod4.bin', 'wb'))
 
 
 # when crouching it should count as walking\running
