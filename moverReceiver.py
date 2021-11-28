@@ -30,8 +30,7 @@ class MoverReceiver:
         self.controller = Controller()  # Set the controller
 
         # Loading prediction models
-        self.model = pickle.load(open('trained_models/mod.bin', 'rb'))
-        #self.model_right = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod3.bin', 'rb'))
 
         self.current_x_l = 0
         self.current_y_l = 0
@@ -62,16 +61,13 @@ class MoverReceiver:
         self.x_plot_list = []
         self.y_plot_list = []
 
-        self.doing_prediction = False
-        self.detected_movement = False
-
     def init_movers(self):
 
         left_mov_tmp = None
         right_mov_tmp = None
 
-        right_id ='8&29C54EA8&0&1'        # right
-        left_id = '8&29C54EA8&0&2'        # left
+        right_id ='8&29C54EA8&0&2'        # right
+        left_id = '8&29C54EA8&0&1'        # left
 
         ports = serial.tools.list_ports.comports()
         for p in ports:
@@ -135,8 +131,7 @@ class MoverReceiver:
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            except Exception as e:
-                #print(e)
+            except Exception:
                 pass
 
     def read_single_mov(self, mov_id):
@@ -155,10 +150,9 @@ class MoverReceiver:
 
             x = float(regex_search[0])
             y = float(regex_search[1])
-            z = float(regex_search[2])  # not really precise but hey
+            z = float(regex_search[2])
             t = float(regex_search[3]) / 1000
-        except Exception as e:
-            #print(e)
+        except Exception:
             x = 0
             y = 0
             z = 0
@@ -167,7 +161,6 @@ class MoverReceiver:
         return x, y, z, t
 
     def loop(self):
-
         while self.should_run_thread:
 
             try:
@@ -177,14 +170,9 @@ class MoverReceiver:
                     self.re_init_movers()
 
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
-                print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
-                print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
-
-
                 zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
-                is_valid = np.all((zero_check != 0.))
-
-                if is_valid:
+                # check if every value is not 0
+                if np.all((zero_check != 0.)):
                     # Setup time
                     try:
                         if first_time == -1 or first_time is None:
@@ -208,23 +196,17 @@ class MoverReceiver:
 
                     # sample size of 50 elements... 25 per sensor?
                     if len(self.x_list_l) > 25 and len(self.x_list_r) > 25:
-                        print("Prediction")
+
                         frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r)
-
-
                         ##############################################
-                        all_frames.append(frame)        # should work?
-                        if len(all_frames) > 50:
-                            print("STOP")
+                        #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
+                        #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
+                        #all_frames.append(frame)        # should work?
+                        #time.sleep(0.1)     # todo let's assume that this is 100 ms, prediction
+                        #if len(all_frames) > 50:
+                        #     print("STOP")
                         ############################
-
-                        # PREDICTION
-                        self.doing_prediction = True
-                        #self.prediction = self.model.predict(np.array(frame).reshape(1, -1))
-                        #print(self.prediction)
-                        time.sleep(0.1)     # todo let's assume that this is 100 ms
-                        self.doing_prediction = False
-
+                        self.prediction = self.model.predict_proba(np.array(frame).reshape(1, -1))
 
                         self.x_list_l = []
                         self.y_list_l = []
@@ -232,10 +214,22 @@ class MoverReceiver:
                         self.x_list_r = []
                         self.y_list_r = []
                         self.z_list_r = []
-
-
                         self.t_list = []
                         first_time = -1  # reset frame time
+
+                        best_pred_probability = np.amax(self.prediction)
+
+
+
+                        if best_pred_probability > 0.75:
+                            best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
+                            print(best_pred)
+                            self.controller.manage_prediction(best_pred)
+                        else:
+                            self.controller.decrease_speed()
+                            continue
+                else:
+                    self.controller.decrease_speed()
 
             except TypeError:
                 # CLEANING
@@ -312,8 +306,11 @@ class GUI:
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
             self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-            self.controller_label = tk.Label(self.controller_frame, text="")
-            self.controller_label.pack()
+            self.controller_label_y = tk.Label(self.controller_frame, text="")
+            self.controller_label_y.pack()
+
+            self.controller_label_x = tk.Label(self.controller_frame, text="")
+            self.controller_label_x.pack()
 
             self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
             self.label_frame_main.config(bg='white')
@@ -369,46 +366,8 @@ class GUI:
         else:
             self.reset_button.config(fg='black')
 
-
-
-        controller_values = self.mover.controller.analog_values_y['current']
-        controller_string = 'tmp'
-
-        if -0.2 < controller_values <= 0.1:
-            controller_string = '->'
-        if 0.1 < controller_values <= 0.2:
-            controller_string = '-->'
-        if 0.2 < controller_values <= 0.3:
-            controller_string = '--->'
-        if 0.3 < controller_values <= 0.4:
-            controller_string = '---->'
-        if 0.4 < controller_values <= 0.5:
-            controller_string = '----->'
-        if 0.5 < controller_values <= 0.6:
-            controller_string = '------>'
-        if 0.6 < controller_values <= 0.7:
-            controller_string = '------->'
-        if 0.7 < controller_values <= 0.8:
-            controller_string = '-------->'
-        if 0.8 < controller_values <= 0.9:
-            controller_string = '--------->'
-        if 0.9 < controller_values <= 1.5:  # includes a little bit of float error
-            controller_string = '---------->'
-
-        self.controller_label['text'] = controller_string
-
-        '''
-        try:
-            acc_values = self.mover.get_current_acceleration()
-
-            self.infos_m['text'] = str(f'{acc_values[0][0]:.2f}') + ", " + str(f'{acc_values[0][1]:.2f}') + ", " \
-                                   + str(f'{acc_values[0][2]:.2f}')
-            self.infos_s['text'] = str(f'{acc_values[1][0]:.2f}') + ", " + str(f'{acc_values[1][1]:.2f}') + ", " \
-                                   + str(f'{acc_values[1][2]:.2f}')
-
-        except IndexError:
-            pass
-        '''
+        self.controller_label_y['text'] = self.mover.controller.analog_values_y['current']
+        self.controller_label_x['text'] = self.mover.controller.analog_values_x['current']
 
         try:
             pass
