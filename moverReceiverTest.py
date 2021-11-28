@@ -1,14 +1,22 @@
 import statistics
+import time
 import serial
-import serial.tools.list_ports
 from serial import SerialException
 import tkinter as tk
 import re
 import pickle
+import threading
 from config import *
 import asyncio
-from controller_module import Controller
+from concurrent.futures.thread import ThreadPoolExecutor
+import concurrent.futures
+import math
+from scipy import signal
+import matplotlib.pyplot as plt
 import numpy as np
+from statistics import mean
+
+from controller_module import Controller
 from filtering import filtering_pass
 
 
@@ -30,7 +38,8 @@ class MoverReceiver:
         self.controller = Controller()  # Set the controller
 
         # Loading prediction models
-        self.model = pickle.load(open('trained_models/mod3.bin', 'rb'))
+        self.model_left = pickle.load(open('trained_models/left/l_mod1.bin', 'rb'))
+        self.model_right = pickle.load(open('trained_models/right/r_mod2.bin', 'rb'))
 
         self.current_x_l = 0
         self.current_y_l = 0
@@ -58,30 +67,45 @@ class MoverReceiver:
         self.prediction_r = -1
 
 
-        self.x_plot_list = []
-        self.y_plot_list = []
+        self.doing_prediction = False
+        self.detected_movement = False
 
     def init_movers(self):
 
         left_mov_tmp = None
         right_mov_tmp = None
+        id_tmp = 0
 
-        right_id ='8&29C54EA8&0&2'        # right
-        left_id = '8&29C54EA8&0&1'        # left
+        while right_mov_tmp is None:
+            try:
 
-        ports = serial.tools.list_ports.comports()
-        for p in ports:
+                mov_tmp = serial.Serial('COM3', baudrate=38400, timeout=0.01)
+                ser_bytes_tmp = mov_tmp.readline()
+                decoded_bytes_tmp = ser_bytes_tmp.decode()
 
-            if p.serial_number == right_id:
-                right_mov_tmp = serial.Serial(p.device, baudrate=38400, timeout=0.01)
-            if p.serial_number == left_id:
-                left_mov_tmp = serial.Serial(p.device, baudrate=38400, timeout=0.01)
+                # todo rewrite this
+                #if re.match('LEFT', decoded_bytes_tmp):
+                #    left_mov_tmp = mov_tmp
+                #    # mov_master_tmp.write(b'c')
+                #    self.id_left = id_tmp
+                if re.match('RIGHT', decoded_bytes_tmp):
+                    right_mov_tmp = mov_tmp
+                    # mov_master_tmp.write(b'c')
+                    self.id_right = id_tmp
 
-        if right_mov_tmp is not None and left_mov_tmp is not None:
-            print("Connected L -> " + str(left_mov_tmp.name))
-            print("Connected R -> " + str(right_mov_tmp.name))
 
-            left_mov_tmp.flushInput()
+            except SerialException:
+                pass
+            print(id_tmp)
+            id_tmp += 1
+            if id_tmp > 10:
+                break
+
+        if right_mov_tmp:
+            #print("Connected L -> COM" + str(self.id_left))
+            print("Connected R -> COM" + str(self.id_right))
+
+            #left_mov_tmp.flushInput()
             right_mov_tmp.flushInput()
 
             self.has_connection_been_estabilished = True
@@ -98,8 +122,8 @@ class MoverReceiver:
         self.right_mov.write(b'r')
 
         time.sleep(5)
-        self.left_mov.write(b'c')
-        self.right_mov.write(b'c')
+        #self.left_mov.write(b'c')
+        #self.right_mov.write(b'c')
         print("Resetted L -> COM" + str(self.id_left))
         print("Resetted R -> COM" + str(self.id_right))
         self.reset_mov = False
@@ -121,17 +145,24 @@ class MoverReceiver:
         while is_done is False:
             try:
 
-                self.left_mov.flushInput()
+                #self.left_mov.flushInput()
                 self.right_mov.flushInput()
-                (x_l, y_l, z_l, t_l) = self.read_single_mov('l')
-                (x_r, y_r, z_r, t_r) = self.read_single_mov('r')
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    #future_l = loop.run_in_executor(pool, self.read_single_mov, 'l')
+                    future_r = loop.run_in_executor(pool, self.read_single_mov, 'r')
 
-                return x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r
+                loop.run_until_complete(loop.shutdown_asyncgens())
+
+                #(x_l, y_l, z_l, t_l) = future_l.result()
+                (x_r, y_r, z_r, t_r) = future_r.result()
+                return x_r, y_r, z_r, t_r
 
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            except Exception:
+            except Exception as e:
+                #print(e)
                 pass
 
     def read_single_mov(self, mov_id):
@@ -150,90 +181,93 @@ class MoverReceiver:
 
             x = float(regex_search[0])
             y = float(regex_search[1])
-            z = float(regex_search[2])
+            z = float(regex_search[2]) - 8100  # not really precise but hey
             t = float(regex_search[3]) / 1000
-        except Exception:
+        except Exception as e:
+            print(e)
             x = 0
             y = 0
             z = 0
             t = 0
 
+
         return x, y, z, t
 
     def loop(self):
+
+        old_x_r = 0
+        done_loop = False
         while self.should_run_thread:
 
             try:
+
                 if self.reset_mov:
                     print("Resetting!")
                     time.sleep(3)
                     self.re_init_movers()
 
-                x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
-                zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
-                # check if every value is not 0
-                if np.all((zero_check != 0.)):
-                    # Setup time
-                    try:
-                        if first_time == -1 or first_time is None:
-                            first_time = t_l
-                    except Exception:
-                        first_time = -1
-                        continue
-                    sec = t_l - first_time  # convert it
-
-                    if sec > -1:
-                        # Read until first second to make a frame
-                        self.x_list_l.append(x_l)
-                        self.y_list_l.append(y_l)
-                        self.z_list_l.append(z_l)
-
-                        self.x_list_r.append(x_r)
-                        self.y_list_r.append(y_r)
-                        self.z_list_r.append(z_r)
-
-                        self.t_list.append(sec)
-
-                    # sample size of 50 elements... 25 per sensor?
-                    if len(self.x_list_l) > 25 and len(self.x_list_r) > 25:
-
-                        frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r, self.z_list_r)
-                        ##############################################
-                        #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
-                        #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
-                        #all_frames.append(frame)        # should work?
-                        #time.sleep(0.1)     # todo let's assume that this is 100 ms, prediction
-                        #if len(all_frames) > 50:
-                        #     print("STOP")
-                        ############################
-                        self.prediction = self.model.predict_proba(np.array(frame).reshape(1, -1))
-
-                        self.x_list_l = []
-                        self.y_list_l = []
-                        self.z_list_l = []
-                        self.x_list_r = []
-                        self.y_list_r = []
-                        self.z_list_r = []
-                        self.t_list = []
-                        first_time = -1  # reset frame time
-
-                        best_pred_probability = np.amax(self.prediction)
-
-
-
-                        if best_pred_probability > 0.75:
-                            best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
-                            print(best_pred)
-                            self.controller.manage_prediction(best_pred)
-                        else:
-                            self.controller.decrease_speed()
-                            continue
+                x_r, y_r, z_r, t_r = self.read_data()
+                if done_loop is True:
+                    print(t_r - first_time)
+                    first_time = -1  # reset frame time
+                    done_loop = False
+                if x_r == old_x_r:
+                    continue
                 else:
-                    self.controller.decrease_speed()
+                    old_x_r = x_r
 
-            except TypeError:
+                  #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
+                #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
+
+                # Setup time
+                try:
+                    if first_time == -1 or first_time is None:
+                        first_time = t_r
+                except Exception:
+                    first_time = -1
+                    continue
+                sec = t_r - first_time  # convert it
+
+
+
+
+                if sec > -1:
+                    # Read until first second to make a frame
+
+                    self.x_list_r.append(x_r)
+                    self.y_list_r.append(y_r)
+                    self.z_list_r.append(z_r)
+
+                    self.t_list.append(sec)
+
+                if sec >= 1:
+                    print(len(self.x_list_r))
+
+                    # CLEANING
+                    for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
+                                        self.z_list_r]:
+                        single_list.clear()
+                    self.t_list = []
+                    done_loop = True
+                    # tuple_list.append(filtered_frame_r)
+
+                #math.log(x) - 2.3
+                #print(math.log(mean_l))
+
+
+                #run speed managament
+                try:
+                    #print(str(math.log(math.log(mean_l)) - 1.2))
+                    #speed_mod = math.log(mean_l)
+                    #print(speed_mod)
+                    pass
+                except ValueError:
+                    pass
+
+
+            except TypeError as e:
                 # CLEANING
-                for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
+                for single_list in [self.x_list_r, self.y_list_r,
                                     self.z_list_r]:
                     single_list.clear()
                 self.t_list = []
@@ -247,6 +281,8 @@ class MoverReceiver:
                     self.init_movers()
                 self.reset_mov = True
 
+
+
     # Thread running section
     def startup_threaded_loop(self):
 
@@ -259,7 +295,7 @@ class MoverReceiver:
         if self.should_run_thread:
             print("Stopping loop...")
             self.should_run_thread = False
-            self.left_mov.flushInput()  # To stop completely
+            #self.left_mov.flushInput()  # To stop completely
             self.right_mov.flushInput()  # To stop completely
 
         else:
@@ -306,11 +342,8 @@ class GUI:
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
             self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-            self.controller_label_y = tk.Label(self.controller_frame, text="")
-            self.controller_label_y.pack()
-
-            self.controller_label_x = tk.Label(self.controller_frame, text="")
-            self.controller_label_x.pack()
+            self.controller_label = tk.Label(self.controller_frame, text="")
+            self.controller_label.pack()
 
             self.label_frame_main = tk.LabelFrame(self.window, text="Acc. Values")
             self.label_frame_main.config(bg='white')
@@ -366,15 +399,52 @@ class GUI:
         else:
             self.reset_button.config(fg='black')
 
-        self.controller_label_y['text'] = self.mover.controller.analog_values_y['current']
-        self.controller_label_x['text'] = self.mover.controller.analog_values_x['current']
+
+
+        controller_values = self.mover.controller.analog_values_y['current']
+        controller_string = 'tmp'
+
+        if -0.2 < controller_values <= 0.1:
+            controller_string = '->'
+        if 0.1 < controller_values <= 0.2:
+            controller_string = '-->'
+        if 0.2 < controller_values <= 0.3:
+            controller_string = '--->'
+        if 0.3 < controller_values <= 0.4:
+            controller_string = '---->'
+        if 0.4 < controller_values <= 0.5:
+            controller_string = '----->'
+        if 0.5 < controller_values <= 0.6:
+            controller_string = '------>'
+        if 0.6 < controller_values <= 0.7:
+            controller_string = '------->'
+        if 0.7 < controller_values <= 0.8:
+            controller_string = '-------->'
+        if 0.8 < controller_values <= 0.9:
+            controller_string = '--------->'
+        if 0.9 < controller_values <= 1.5:  # includes a little bit of float error
+            controller_string = '---------->'
+
+        self.controller_label['text'] = controller_string
+
+        '''
+        try:
+            acc_values = self.mover.get_current_acceleration()
+
+            self.infos_m['text'] = str(f'{acc_values[0][0]:.2f}') + ", " + str(f'{acc_values[0][1]:.2f}') + ", " \
+                                   + str(f'{acc_values[0][2]:.2f}')
+            self.infos_s['text'] = str(f'{acc_values[1][0]:.2f}') + ", " + str(f'{acc_values[1][1]:.2f}') + ", " \
+                                   + str(f'{acc_values[1][2]:.2f}')
+
+        except IndexError:
+            pass
+        '''
 
         try:
             pass
-            if self.mover.prediction_l[0] != -1:
-                self.prediction_label_l['text'] = str(self.mover.prediction_l[0])
-            if self.mover.prediction_r[0] != -1:
-                self.prediction_label_r['text'] = str(self.mover.prediction_r[0])
+
+            self.prediction_label_l['text'] = self.mover.prediction_l[0]
+            self.prediction_label_r['text'] = self.mover.prediction_r[0]
         except (IndexError, TypeError):
             pass
             #print("Error during prediction printing")
@@ -452,7 +522,7 @@ class GUI:
     def open_config_window(self):
         global config
 
-        if self.config_window is None or self.config_window.winfo_exists() is 0:
+        if self.config_window is None or self.config_window.winfo_exists() == 0:
             self.config_window = tk.Toplevel(self.window)
             self.config_window.iconbitmap(r'favicon.ico')
             self.config_window.minsize(250, 150)
@@ -490,6 +560,13 @@ class GUI:
 
 ########################################################################################
 # Startup
+# TODO better startup
+first_time = None
+x_filtered_list = []
+x_full_list = []
+y_full_list = []
+z_full_list = []
+t_full_list = []
 
 current_frame = []
 all_frames = []
@@ -497,11 +574,6 @@ tuple_list = []
 
 mov = MoverReceiver()
 gui = GUI(mov)
-
-#import matplotlib.pyplot as plt
-#plt.plot()
-#plt.scatter(mov.x_plot_list, mov.y_plot_list)
-#plt.show()
 
 '''
 ################################################################################################

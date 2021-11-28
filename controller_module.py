@@ -1,6 +1,7 @@
 import pyxinput
 from config import *
 
+
 LEFT_AXIS_X = 'AxisLx'
 LEFT_AXIS_Y = 'AxisLy'
 
@@ -8,94 +9,116 @@ OLD_ANALOG_KEY = 'old'
 CURR_ANALOG_KEY = 'current'
 
 
+NORMAL_MOV = 0.
+RUN_MOV = 1.
+LEFT_MOV = 2.
+RIGHT_MOV = 3.
+
+LEFT = 0
+RIGHT = 1
+
 class Controller:
+    # 1) Get predictions from main
+    # 2) Decide which to chose
+    # 3) Set analog value for x and y depending on current value
+    # 4) Backup current value for x and y
 
     def __init__(self):
         # Setup virtual controller
         self.controller = pyxinput.vController()
-        self.analog_values = {'old': 0, 'current': 0}
+        self.analog_values_y = {'old': 0., 'current': 0.}
+        self.analog_values_x = {'old': 0., 'current': 0.}
+
         self.prev_prediction = None
 
-    def get_new_analog_values(self, increment, decrease, top_value, ):
-        if self.analog_values[OLD_ANALOG_KEY] < top_value:
-            new_y_value = self.analog_values[OLD_ANALOG_KEY] + increment
+    def get_correct_y(self, array, increment, top_value):
+        if array[OLD_ANALOG_KEY] <= top_value:
+            new_y_value = (array[OLD_ANALOG_KEY] + increment)/2     # smooth it out
         else:
-            new_y_value = self.analog_values[OLD_ANALOG_KEY] - decrease
+            new_y_value = array[OLD_ANALOG_KEY]     # current
 
         return new_y_value
 
-    def set_analog(self, preds):
+    def get_correct_x(self, array, increment, top_value, direction):
 
-        # if there is only one 3, then we have to ignore it and choose the latter
-
-        try:
-            first_prediction = preds[0]
-            second_prediction = preds[1]
-
-            if first_prediction == 0. and second_prediction == 0.:
-                self.choose_prediction(0.)
-
+        # negative values
+        if direction == LEFT:
+            if array[OLD_ANALOG_KEY] >= top_value:
+                x = (array[OLD_ANALOG_KEY] - increment) / 2  # smooth it out
             else:
-                # only one is stopped
-                if (first_prediction == 0.) ^ (second_prediction == 0.):
-
-                    if first_prediction == 0.:
-                        self.choose_prediction(second_prediction)
-                    else:
-                        self.choose_prediction(first_prediction)
-                else:
-                    if self.prev_prediction == first_prediction:
-                        self.choose_prediction(first_prediction)
-                    else:
-                        self.choose_prediction(second_prediction)
-
-        except IndexError:
-            pass
-
-    def choose_prediction(self, prediction):
-        # todo better if ints and not floats
-
-
-        # at least 2 same prediction in a row to do something.
-        new_y_value = 0
-
-        if prediction == self.prev_prediction:
-
-            if prediction == 0.:
-                # stopped
-                if -0.1 < self.analog_values[OLD_ANALOG_KEY] < stopped_range:
-                    new_y_value = 0
-                else:
-                    new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
-            if prediction == 1.:
-                # walking
-                new_y_value = self.get_new_analog_values(walking_increment, walking_decrement, walking_top)
-            if prediction == 2.:
-                # jogging
-                new_y_value = self.get_new_analog_values(jogging_increment, jogging_decrement, jogging_top)
-
-                pass
+                x = array[OLD_ANALOG_KEY]  # current
         else:
-            new_y_value = self.analog_values[OLD_ANALOG_KEY] - stopped_decrement
 
-        # check overflow and underflow
-        if new_y_value < 0.:
-            new_y_value = 0.
+            if array[OLD_ANALOG_KEY] <= top_value:
+                x = (array[OLD_ANALOG_KEY] + increment) / 2  # smooth it out
+            else:
+                x = array[OLD_ANALOG_KEY]  # current
 
-        if new_y_value > 1.:
-            new_y_value = 1.        # cap it off to max value
+        return x
+    def manage_prediction(self, pred):
 
-        self.controller.set_value(LEFT_AXIS_Y, new_y_value)
+        # startup
+        y_value = self.analog_values_y[OLD_ANALOG_KEY]
+        x_value = self.analog_values_x[OLD_ANALOG_KEY]
+
+        self.prev_prediction = pred
+
+        # WALK
+        if pred == 0.:
+            y_value = self.get_correct_y(self.analog_values_y,
+                                                 walking_increment, walking_top)
+        # RUN
+        if pred == 1.:
+            y_value = self.get_correct_y(self.analog_values_y,
+                                                 jogging_increment, jogging_top)
+
+        # SIDE LEFT
+        if pred == 2.:
+            x_value = self.get_correct_x(self.analog_values_x, side_increment, -side_top, LEFT)
+
+        # SIDE RIGHT
+        if pred == 3.:
+            x_value = self.get_correct_x(self.analog_values_x, side_increment, side_top, RIGHT)
+
+
         # back them up
-        self.analog_values[OLD_ANALOG_KEY] = self.analog_values[CURR_ANALOG_KEY]
-        self.analog_values[CURR_ANALOG_KEY] = new_y_value
-        self.prev_prediction = prediction       # salves old prediction
+        self.analog_values_y[OLD_ANALOG_KEY] = self.analog_values_y[CURR_ANALOG_KEY]
+        self.analog_values_y[CURR_ANALOG_KEY] = y_value
+        self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
+        self.analog_values_x[CURR_ANALOG_KEY] = x_value
 
-        if debug_printing_controller:
-            print("Pred -> " + str(prediction))
-            print("Old Y -> " + str(f'{self.analog_values[OLD_ANALOG_KEY]:.2f}'))
-            print("New Y -> " + str(f'{self.analog_values[CURR_ANALOG_KEY]:.2f}'))
-            print("___________________________")
+        # Applies current values
+        self.controller.set_value(LEFT_AXIS_Y, y_value)
+        self.controller.set_value(LEFT_AXIS_X, x_value)
 
-    def get_y_axis(self):
-        return self.analog_values[CURR_ANALOG_KEY]
+    def decrease_speed(self):
+        # STOPPING
+        y_value = self.analog_values_y[CURR_ANALOG_KEY]
+        x_value = self.analog_values_x[CURR_ANALOG_KEY]
+
+
+        y_value = y_value - 0.01
+
+
+        # to stop it from jittering
+        if x_value == 0 or abs(x_value) < 0.005:
+            x_value = 0
+        else:
+            if x_value < 0:
+                x_value = x_value + 0.01
+            else:
+                x_value = x_value - 0.01
+
+        if y_value < 0:
+            y_value = 0
+
+        # back them up
+        self.analog_values_y[OLD_ANALOG_KEY] = self.analog_values_y[CURR_ANALOG_KEY]
+        self.analog_values_y[CURR_ANALOG_KEY] = y_value
+        self.analog_values_x[OLD_ANALOG_KEY] = self.analog_values_x[CURR_ANALOG_KEY]
+        self.analog_values_x[CURR_ANALOG_KEY] = x_value
+
+        # Applies current values
+        self.controller.set_value(LEFT_AXIS_Y, y_value)
+        self.controller.set_value(LEFT_AXIS_X, x_value)
+
