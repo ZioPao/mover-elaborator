@@ -13,6 +13,7 @@ import numpy as np
 class MoverReceiver:
 
     def __init__(self):
+        print("------------MOVER MANAGER------------\n")
 
         # One time setup
         self.thread = None
@@ -81,16 +82,6 @@ class MoverReceiver:
         self.first_loop = True
         self.should_run_thread = True
         time.sleep(3)
-
-    def initial_setup(self):
-
-        print("------------MOVER MANAGER------------\n")
-
-        print("Start")
-        self.left_mov.reset_input_buffer()
-        self.right_mov.reset_input_buffer()
-
-        # Start reading threads
 
     # Main operations
     def read_data(self):
@@ -381,7 +372,7 @@ class GUI:
     def open_config_window(self):
         global config
 
-        if self.config_window is None or self.config_window.winfo_exists() is 0:
+        if self.config_window is None or self.config_window.winfo_exists() == 0:
             self.config_window = tk.Toplevel(self.window)
             self.config_window.iconbitmap(r'favicon.ico')
             self.config_window.minsize(250, 150)
@@ -420,208 +411,7 @@ class GUI:
 ########################################################################################
 # Startup
 
-current_frame = []
-all_frames = []
-tuple_list = []
+#all_frames = []
 
 mov = MoverReceiver()
 gui = GUI(mov)
-
-# import matplotlib.pyplot as plt
-# plt.plot()
-# plt.scatter(mov.x_plot_list, mov.y_plot_list)
-# plt.show()
-'''
-################################################################################################
-for x in all_frames:
-    x_full_list.append([var[0] for var in x])
-    # check len, must be > 500 Hz ?
-
-y_full_list = []
-for y in all_frames:
-    y_full_list.append([var[1] for var in y])
-
-z_full_list = []
-for z in all_frames:
-    z_full_list.append([var[2] for var in z])
-
-t_full_list = []
-for t in all_frames:
-    t_full_list.append([var[3] for var in t])
-
-for i in range(0, 12):
-    x_list = x_full_list[i]
-    x_list.pop(0)
-
-    y_list = y_full_list[i]
-    y_list.pop(0)
-
-    z_list = z_full_list[i]
-    z_list.pop(0)
-
-    fixed_z_list = []
-    for z in z_list:
-        fixed_z_list.append(z - 8150)
-
-    t_list = t_full_list[i]
-    t_list.pop()
-
-    plt.rcParams["figure.figsize"] = 10, 5
-    plt.rcParams["font.size"] = 16
-    plt.rcParams.update({"text.usetex": True, "font.family": "sans-serif", "font.sans-serif": ["Helvetica"]})
-    plt.figure()
-    plt.plot(t_list, x_list)
-    plt.plot(t_list, y_list)
-    plt.plot(t_list, fixed_z_list)
-    plt.title(i)
-    plt.xlabel("time")
-    plt.ylabel("axis")
-    plt.xlim([min(t_list), max(t_list)])
-    plt.show()
-
-plt.figure()
-plt.plot(t_list, x_filtered_list)
-plt.xlabel("time")
-plt.ylabel("y")
-plt.show()
-
-y_fourier = np.fft.fft(x_list)
-y_filtered_fourier = np.fft.fft(x_filtered_list)
-cycles_fourier = np.fft.fftfreq(len(t_list), d=1.0 / 770)  # the frequencies in cycles/s
-
-plt.figure()
-plt.plot(cycles_fourier, np.absolute(y_fourier))
-plt.plot(cycles_fourier, np.absolute(y_filtered_fourier))
-plt.xlim([-100, 100])
-plt.xlabel("$\omega$ (cycles/s)")
-plt.ylabel("$|\hat{y}|$")
-plt.show()
-# checks if it's actually moving. if it's moving, we have to check the window of around 1 second...
-
-w0 = 2 * np.pi * 5  # pole frequency (rad/s)
-num = w0  # transfer function numerator coefficients
-den = [1, w0]  # transfer function denominator coefficients
-dt = 1.0 / 772
-discreteLowPass = signal.cont2discrete((num, den), dt, method='gbt', alpha=0.5)
-
-# The coefficients from the discrete form of the filter transfer function (but with a negative sign)
-b = discreteLowPass[0][0]
-a = [-x for x in discreteLowPass]
-print("Filter coefficients b_i: " + str(b))
-print("Filter coefficients a_i: " + str(a[1:]))
-
-# Filter the signal
-yfilt = np.zeros(len(x_list))
-for i in range(3, len(x_list)):
-    yfilt[i] = a[1] * yfilt[i - 1] + b[0] * x_list[i] + b[1] * x_list[i - 1]
-
-plt.figure()
-plt.plot(t_list, x_list)
-plt.plot(t_list, yfilt)
-plt.ylabel("$y(t)$")
-plt.show()
-
-yfilthat = np.fft.fft(yfilt)
-fcycles = np.fft.fftfreq(len(t_list), d=1.0 / 772)
-
-plt.figure()
-plt.plot(fcycles, np.absolute(y_fourier))
-plt.plot(fcycles, np.absolute(yfilthat))
-plt.xlim([-100, 100])
-plt.xlabel("$\omega$ (cycles/s)")
-plt.ylabel("$|\hat{y}|$")
-
-#### BUTTERWORTH LOW PASS
-
-samplingFreq = 600  # around this
-signalFreq = [2, 100]
-
-# Butterworth filter
-wc = 2 * np.pi * 5  # cutoff frequency (rad/s)
-n = 2  # Filter order
-
-# Compute the Butterworth filter coefficents
-a = np.zeros(n + 1)
-gamma = np.pi / (2.0 * n)
-a[0] = 1  # first coef is always 1
-for k in range(0, n):
-    rfac = np.cos(k * gamma) / np.sin((k + 1) * gamma)
-    a[k + 1] = rfac * a[k]  # Other coefficients by recursion
-
-print("Butterworth polynomial coefficients a_i:                " + str(a))
-
-# Adjust the cutoff frequency
-c = np.zeros(n + 1)
-for k in range(0, n + 1):
-    c[n - k] = a[k] / pow(wc, k)
-
-print("Butterworth coefficients with frequency adjustment c_i: " + str(c))
-# Low-pass filter
-w0 = 2 * np.pi * 5  # pole frequency (rad/s)
-num = [1]  # transfer function numerator coefficients
-den = c  # transfer function denominator coefficients
-lowPass = signal.TransferFunction(num, den)  # Transfer function
-
-# Generate the bode plot
-w = np.logspace(np.log10(min(signalFreq) * 2 * np.pi / 10), np.log10(max(signalFreq) * 2 * np.pi * 10), 500)
-w, mag, phase = signal.bode(lowPass, w)
-
-# Magnitude plot
-plt.figure()
-plt.semilogx(w, mag)
-for sf in signalFreq:
-    plt.semilogx([sf * 2 * np.pi, sf * 2 * np.pi], [min(mag), max(mag)], 'k:')
-plt.ylabel("Magnitude ($dB$)")
-plt.xlim([min(w), max(w)])
-plt.ylim([min(mag), max(mag)])
-
-# Phase plot
-plt.figure()
-plt.semilogx(w, phase)  # Bode phase plot
-plt.ylabel("Phase ($^\circ$)")
-plt.xlabel("$\omega$ (rad/s)")
-plt.xlim([min(w), max(w)])
-plt.show()
-
-# Compute the discrete low pass with delta_t = 1/samplingFrequency
-dt = 1.0 / samplingFreq
-discreteLowPass = lowPass.to_discrete(dt, method='gbt', alpha=0.5)
-print(discreteLowPass)
-
-# The coefficients from the discrete form of the filter transfer function (but with a negative sign)
-b = discreteLowPass.num
-a = -discreteLowPass.den
-print("Filter coefficients b_i: " + str(b))
-print("Filter coefficients a_i: " + str(a[1:]))
-
-# Filter the signal
-Nb = len(b)
-xfilt = np.zeros(len(x_full_list))
-for m in range(3, len(x_full_list)):
-    xfilt[m] = b[0] * x_full_list[m]
-    for i in range(1, Nb):
-        xfilt[m] += a[i] * xfilt[m - i] + b[i] * x_full_list[m - i]
-# View the result
-# Plot the signal
-plt.figure()
-plt.plot(t_full_list, x_full_list)
-plt.plot(t_full_list, xfilt)
-plt.ylabel("$y(t)$")
-plt.xlim([min(t_full_list), max(t_full_list)])
-plt.show()
-
-# Generate Fourier transform
-yfilthat = np.fft.fft(yfilt)
-fcycles = np.fft.fftfreq(len(t), d=1.0 / samplingFreq)
-
-plt.figure()
-plt.plot(fcycles, np.absolute(yhat));
-plt.plot(fcycles, np.absolute(yfilthat));
-plt.xlim([-100, 100]);
-plt.xlabel("$\omega$ (cycles/s)");
-plt.ylabel("$|\hat{y}|$");
-
-s = time.time()
-filtering(frame)
-e = time.time()
-print(str(e - s))'''
