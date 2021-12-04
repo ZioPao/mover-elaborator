@@ -4,6 +4,7 @@ from sklearn import svm
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
+from sklearn.neighbors import KNeighborsClassifier
 
 walk_X = pickle.load(open('datasets_to_compile/walk.bin', 'rb'))
 walk_X = np.array(walk_X)
@@ -39,30 +40,42 @@ final_y = np.append(walk_y, run_y)
 final_y = np.append(final_y, side_left_y)
 final_y = np.append(final_y, side_right_y)
 
+# weight
+weight = np.ones(len(final_y))
+weight[0:len(walk_y)] *= 3
+weight[len(walk_y):len(run_y)] *= 2
+
+
 # let's mix it up boy
 np.random.seed(0)
+test_sub = 50
 indices = np.random.permutation(len(final_X))
-X_train = final_X[indices[:-30]]
-y_train = final_y[indices[:-30]]
+X_train = final_X[indices[:-test_sub]]
+y_train = final_y[indices[:-test_sub]]
+weight_train = weight[indices[:-test_sub]]
 
-X_test = final_X[indices[-30:]]
-y_test = final_y[indices[-30:]]
+X_test = final_X[indices[-test_sub:]]
+y_test = final_y[indices[-test_sub:]]
 
-
-clf = svm.SVC(random_state=0, probability=True)
+c_value = 12
+#clf = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
+clf = KNeighborsClassifier(n_neighbors=2, weights='distance')
+#clf.fit(X_train, y_train, sample_weight=weight_train)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
 cm = confusion_matrix(y_test, y_pred)
 plt.matshow(cm)
-plt.title('Confusion matrix (SVC) LEFT')
+#plt.title('SVM - C=' + str(c_value) + ', accuracy=' + str(accuracy_score(y_test, y_pred)))
+plt.title('KNN - n_neighbors=2, accuracy=' + str(accuracy_score(y_test, y_pred)))
 plt.colorbar()
 plt.ylabel('True label')
 plt.xlabel('Predicted label')
 plt.show()
 print(accuracy_score(y_test, y_pred))
 
-pickle.dump(clf, open('trained_models/mod4.bin', 'wb'))
+
+pickle.dump(clf, open('trained_models/mod5.bin', 'wb'))
 
 
 # when crouching it should count as walking\running
@@ -88,7 +101,9 @@ pickle.dump(all_frames, open('datasets_to_compile/prediction_list_run3.bin', 'wb
 #           Il salto lo reimplemento una volta che ho capito come differenziarlo maggiormente dalla corsa, che viene confusa troppe volte
 #MODEL 21: lost to time
 #MODEL 22: passato a CLF piuttosto che KNN, più accurato
-
+# REBOOT
+# MOD 4: almost final
+# MOD 5: weightning walk and run more than anything else
 
 side_right_X = np.array(tuple_list)
 n_samples, nx, ny = side_right_X.shape

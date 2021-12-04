@@ -29,7 +29,7 @@ class MoverReceiver:
 
         self.controller = Controller()  # Setup the controller
 
-        self.model = pickle.load(open('trained_models/mod4.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod5.bin', 'rb'))
         self.prediction = -1
         self.pred_list = []
         self.x_list_l = []
@@ -411,7 +411,7 @@ class GUI:
 ########################################################################################
 # Startup
 
-#all_frames = []
+# all_frames = []
 
 mov = MoverReceiver()
 gui = GUI(mov)
