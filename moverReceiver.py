@@ -17,21 +17,13 @@ class MoverReceiver:
 
         # One time setup
         self.thread = None
-        self.reset_mov = False
         self.should_run_thread = False
-        self.first_loop = True
-
-        self.id_left = 0
-        self.id_right = 0
-
         self.has_connection_been_estabilished = False
         self.left_mov, self.right_mov = self.init_movers()
-
         self.controller = Controller()  # Setup the controller
 
         self.model = pickle.load(open('trained_models/mod5.bin', 'rb'))
         self.prediction = -1
-        self.pred_list = []
         self.x_list_l = []
         self.y_list_l = []
         self.z_list_l = []
@@ -39,6 +31,11 @@ class MoverReceiver:
         self.y_list_r = []
         self.z_list_r = []
         self.t_list = []
+
+
+        # to share data
+        self.best_pred = -1
+        self.current_data = [[0,0,0],[0,0,0]]
 
 
     def init_movers(self):
@@ -73,16 +70,6 @@ class MoverReceiver:
 
         return left_mov_tmp, right_mov_tmp
 
-    def re_init_movers(self):
-        self.should_run_thread = False
-        self.left_mov.write(b'r')
-        self.right_mov.write(b'r')
-
-        self.reset_mov = False
-        self.first_loop = True
-        self.should_run_thread = True
-        time.sleep(3)
-
     # Main operations
     def read_data(self):
         is_done = False
@@ -97,6 +84,7 @@ class MoverReceiver:
                 return x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r
 
             except RuntimeError:
+                print("Runtime error in read_data")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
@@ -117,7 +105,9 @@ class MoverReceiver:
             y = float(regex_search[1])
             z = float(regex_search[2])
             t = float(regex_search[3]) / 1000
-        except Exception:
+        except IndexError:
+            #print(e)
+            #print("CANNOT READ DATA!!!!!")
             x = 0
             y = 0
             z = 0
@@ -128,21 +118,14 @@ class MoverReceiver:
     def loop(self):
         while self.should_run_thread:
             try:
-                if self.reset_mov:
-                    print("Resetting!")
-                    self.re_init_movers()
-                    continue
-
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
-
-                if (type(x_l) == int or type(x_l) == float) and self.first_loop:
-                    print("STARTING LOOP!")
-                    self.first_loop = False
-
                 zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
 
                 # check if every value is not 0
                 if np.all((zero_check != 0.)):
+
+                    self.current_data = [[x_l,y_l,z_l], [x_r,y_r,z_r]]
+
                     # Setup time
                     try:
                         if first_time == -1 or first_time is None:
@@ -191,33 +174,26 @@ class MoverReceiver:
                         best_pred_probability = np.amax(self.prediction)
 
                         if best_pred_probability > 0.75:
-                            best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
-                            self.controller.manage_prediction(best_pred)
+                            self.best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
+                            self.controller.manage_prediction(self.best_pred)
 
                             #self.pred_list.append(best_pred)
                         else:
                             self.controller.decrease_speed()
-
-                        #if len(self.pred_list) > 5:
-                        #    chosen_pred = np.bincount(self.pred_list).argmax()
-                        #    print(chosen_pred)
-                        #    self.controller.manage_prediction(chosen_pred)
                 else:
+                    self.current_data = [[0,0,0],[0,0,0]]
                     self.controller.decrease_speed()
-
-            except TypeError:
+            except TypeError as e:
+                print("Entering type error")
                 # CLEANING
                 for single_list in [self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r, self.y_list_r,
                                     self.z_list_r]:
                     single_list.clear()
                 self.t_list = []
                 first_time = -1  # reset frame time
-
-            except SerialException as e:
-                #todo can't trigger it anymore, fix it
-                #print("Mover disconnected! Retrying initialization")
-                print(e)
-                self.reset_mov = True
+            except SerialException:
+                print("Reconnect devices")
+                exit(1)
 
     # Thread running section
     def startup_threaded_loop(self):
@@ -233,10 +209,6 @@ class MoverReceiver:
             self.should_run_thread = False
         else:
             print("It's not running right now!")
-
-    def set_reset_mov(self, var):
-        self.reset_mov = var
-
 
 class GUI:
 
@@ -262,6 +234,14 @@ class GUI:
             self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
             self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
             self.stop_button.config(fg='black')
+
+            self.debug_frame = tk.LabelFrame(self.main_frame)
+            self.debug_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.debug_left_label = tk.LabelFrame(self.debug_frame)
+            self.debug_left_label.pack(fill="both", expand="yes")
+            self.debug_right_label = tk.LabelFrame(self.debug_frame)
+            self.debug_right_label.pack(fill="both", expand="yes")
+
 
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
@@ -315,6 +295,10 @@ class GUI:
 
         self.y_axis_info['text'] = self.mover.controller.analog_values_y['current']
         self.x_axis_info['text'] = self.mover.controller.analog_values_x['current']
+        self.debug_left_label['text'] = self.mover.current_data[0]
+        self.debug_right_label['text'] = self.mover.current_data[1]
+
+        self.prediction_label['text'] = self.mover.best_pred
 
         self.prediction_label_main.after(1, self.update_values)
 
@@ -329,6 +313,7 @@ class GUI:
             self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
             self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
             self.stop_button.config(fg='black')
+
 
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
