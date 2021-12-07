@@ -22,7 +22,7 @@ class MoverReceiver:
         self.left_mov, self.right_mov = self.init_movers()
         self.controller = Controller()  # Setup the controller
 
-        self.model = pickle.load(open('trained_models/mod5.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod6.bin', 'rb'))
         self.prediction = -1
         self.x_list_l = []
         self.y_list_l = []
@@ -35,7 +35,7 @@ class MoverReceiver:
 
         # to share data
         self.best_pred = -1
-        self.current_data = [[0,0,0],[0,0,0]]
+        self.current_data = [[0,0,0], [0,0,0]]
 
 
     def init_movers(self):
@@ -64,9 +64,9 @@ class MoverReceiver:
             self.has_connection_been_estabilished = True
         else:
             print("Couldn't find the devices!")
-            self.has_connection_been_estabilished = False
-            left_mov_tmp = None
-            right_mov_tmp = None
+            self.has_connection_been_estabilished = True
+            left_mov_tmp = 1
+            right_mov_tmp = 1
 
         return left_mov_tmp, right_mov_tmp
 
@@ -181,7 +181,7 @@ class MoverReceiver:
                         else:
                             self.controller.decrease_speed()
                 else:
-                    self.current_data = [[0,0,0],[0,0,0]]
+                    self.current_data = [[0,0,0], [0,0,0]]
                     self.controller.decrease_speed()
             except TypeError as e:
                 print("Entering type error")
@@ -228,26 +228,27 @@ class GUI:
         self.main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         if mover.has_connection_been_estabilished:
-            self.start_button = tk.Button(self.main_frame, text='Start', command=self.mover.startup_threaded_loop)
+            self.buttons_frame = tk.LabelFrame(self.main_frame)
+            self.buttons_frame.pack(fill=tk.X, expand=True)
+            self.start_button = tk.Button(self.buttons_frame, text='Start', command=self.mover.startup_threaded_loop)
             self.start_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
 
-            self.stop_button = tk.Button(self.main_frame, text='Stop', command=self.mover.stop_currently_running_thread)
+            self.stop_button = tk.Button(self.buttons_frame, text='Stop', command=self.mover.stop_currently_running_thread)
             self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
             self.stop_button.config(fg='black')
 
             self.debug_frame = tk.LabelFrame(self.main_frame)
-            self.debug_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-            self.debug_left_label = tk.LabelFrame(self.debug_frame)
-            self.debug_left_label.pack(fill="both", expand="yes")
-            self.debug_right_label = tk.LabelFrame(self.debug_frame)
-            self.debug_right_label.pack(fill="both", expand="yes")
-
+            self.debug_frame.pack(expand=True, fill=tk.BOTH)
+            self.debug_left_label = tk.Label(self.debug_frame)
+            self.debug_left_label.pack(side=tk.LEFT, padx=60)
+            self.debug_right_label = tk.Label(self.debug_frame)
+            self.debug_right_label.pack(side=tk.LEFT)
 
             # Controller related stuff
             self.controller_frame = tk.Frame(self.window, relief=tk.RAISED)
             self.controller_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-            self.label_frame_main = tk.LabelFrame(self.window, text="Controller")
+            self.label_frame_main = tk.LabelFrame(self.window, text="Controller Values")
             self.label_frame_main.config(bg='white')
             self.label_frame_main.pack(fill="both", expand="yes")
 

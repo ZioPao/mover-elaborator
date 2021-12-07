@@ -1,9 +1,14 @@
+from statistics import mean
 import numpy as np
 import pickle
+import pandas as pd
+from numpy.ma import std
 from sklearn import svm
 import matplotlib.pyplot as plt
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import cross_val_score, KFold, train_test_split, permutation_test_score
 from sklearn.neighbors import KNeighborsClassifier
 
 walk_X = pickle.load(open('datasets_to_compile/walk.bin', 'rb'))
@@ -40,42 +45,80 @@ final_y = np.append(walk_y, run_y)
 final_y = np.append(final_y, side_left_y)
 final_y = np.append(final_y, side_right_y)
 
-# weight
-weight = np.ones(len(final_y))
-weight[0:len(walk_y)] *= 3
-weight[len(walk_y):len(run_y)] *= 2
 
+#test = np.insert(final_X, int(0), final_y, axis=1)
+#pd.DataFrame(test).to_csv("test.csv")
+
+
+X_train, X_test, y_train, y_test = train_test_split(final_X, final_y, test_size=0.3, random_state=0)
+# weights
+#weight = np.ones(len(final_y))
+#weight[0:len(walk_y)] *= 3
+#weight[len(walk_y):len(run_y)] *= 2
 
 # let's mix it up boy
-np.random.seed(0)
-test_sub = 50
-indices = np.random.permutation(len(final_X))
-X_train = final_X[indices[:-test_sub]]
-y_train = final_y[indices[:-test_sub]]
-weight_train = weight[indices[:-test_sub]]
+#np.random.seed(0)
+#test_sub = 50
+#indices = np.random.permutation(len(final_X))
+#X_train = final_X[indices[:-test_sub]]
+#y_train = final_y[indices[:-test_sub]]
+#weight_train = weight[indices[:-test_sub]]
 
-X_test = final_X[indices[-test_sub:]]
-y_test = final_y[indices[-test_sub:]]
+#X_test = final_X[indices[-test_sub:]]
+#y_test = final_y[indices[-test_sub:]]
 
 c_value = 12
-#clf = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
-clf = KNeighborsClassifier(n_neighbors=2, weights='distance')
+cv = KFold(n_splits=8, random_state=69, shuffle=True)
+clf = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
+clf = CalibratedClassifierCV(base_estimator=clf, cv=cv)
+
+
 #clf.fit(X_train, y_train, sample_weight=weight_train)
 clf.fit(X_train, y_train)
 
-y_pred = clf.predict(X_test)
+scores = cross_val_score(clf, final_X, final_y, scoring='accuracy', cv=cv, n_jobs=-1)
+# report performance
+print('Accuracy: %.3f (%.3f)' % (mean(scores), std(scores)))
+print("Scoring: %.3f" % clf.score(X_test, y_test))
+
+# confusion matrix
+y_pred = clf.predict_proba(X_test)
+y_pred = np.argmax(y_pred, axis=1)
 cm = confusion_matrix(y_test, y_pred)
 plt.matshow(cm)
 #plt.title('SVM - C=' + str(c_value) + ', accuracy=' + str(accuracy_score(y_test, y_pred)))
-plt.title('KNN - n_neighbors=2, accuracy=' + str(accuracy_score(y_test, y_pred)))
+plt.title('KNN - n_neighbors=2, accuracy=%.3f' % mean(scores))
 plt.colorbar()
 plt.ylabel('True label')
 plt.xlabel('Predicted label')
 plt.show()
-print(accuracy_score(y_test, y_pred))
+
+#pickle.dump(clf, open('trained_models/mod6.bin', 'wb'))
+
+score_dataset, perm_scores_dataset, pvalue_dataset = permutation_test_score(
+    clf, final_X, final_y, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1
+)
 
 
-pickle.dump(clf, open('trained_models/mod5.bin', 'wb'))
+fig, ax = plt.subplots()
+
+ax.hist(perm_scores_dataset, bins=20, density=True)
+ax.axvline(score_dataset, ls="--", color="r")
+score_label = f"Score on original\ndata: {score_dataset:.2f}\n(p-value: {pvalue_dataset:.3f})"
+ax.text(0.7, 10, score_label, fontsize=12)
+ax.set_xlabel("Accuracy score")
+_ = ax.set_ylabel("Probability")
+
+fig, ax = plt.subplots()
+
+ax.hist(perm_scores_rand, bins=20, density=True)
+ax.set_xlim(0.13)
+ax.axvline(score_rand, ls="--", color="r")
+score_label = f"Score on original\ndata: {score_rand:.2f}\n(p-value: {pvalue_rand:.3f})"
+ax.text(0.14, 7.5, score_label, fontsize=12)
+ax.set_xlabel("Accuracy score")
+ax.set_ylabel("Probability")
+plt.show()
 
 
 # when crouching it should count as walking\running
@@ -108,3 +151,32 @@ pickle.dump(all_frames, open('datasets_to_compile/prediction_list_run3.bin', 'wb
 side_right_X = np.array(tuple_list)
 n_samples, nx, ny = side_right_X.shape
 side_right_X_r = side_right_X.reshape((n_samples, nx*ny))
+
+
+
+counter = 0
+counter_y = 0
+array_string = []
+string_tmp = ''
+for x in final_X.flatten():
+    counter += 1
+    string_tmp += str(x)
+    if counter == 306:
+        array_string.append([final_y[counter_y], string_tmp])
+        string_tmp = ''
+        counter = 0
+
+        counter_y += 1
+    else:
+        string_tmp += ','
+
+np_string = np.array(array_string)
+for x in np_string:
+    print(x)
+
+
+pd.DataFrame(np_string).to_csv("test.csv")
+
+
+test = np.insert(np_string, int(0), final_y, axis=0)
+
