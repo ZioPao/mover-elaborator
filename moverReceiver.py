@@ -22,7 +22,7 @@ class MoverReceiver:
         self.left_mov, self.right_mov = self.init_movers()
         self.controller = Controller()  # Setup the controller
 
-        self.model = pickle.load(open('trained_models/mod6.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod8.bin', 'rb'))
         self.prediction = -1
         self.x_list_l = []
         self.y_list_l = []
@@ -147,20 +147,24 @@ class MoverReceiver:
 
                         self.t_list.append(sec)
 
-                    # sample size of 50 elements... 25 per sensor?
-                    if len(self.x_list_l) > 50 and len(self.x_list_r) > 50:
+                    # sample size of 100 elements... 50 per sensor?
+                    if len(self.x_list_l) > 50 or len(self.x_list_r) > 50:
 
                         frame = (self.x_list_l, self.y_list_l, self.z_list_l, self.x_list_r,
                                  self.y_list_r, self.z_list_r)
                         ##############################################
-                        #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
-                        #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
-                        #all_frames.append(frame)        # should work?
-                        #time.sleep(0.1)     # todo let's assume that this is 100 ms, prediction
-                        #if len(all_frames) > 100:
-                        #    print("STOP")
-                        ############################
-                        self.prediction = self.model.predict_proba(np.array(frame).reshape(1, -1))
+
+                        if debug_learning:
+                            #print("Right: " + str(x_r) + ", " + str(y_r) + ", " + str(z_r))
+                            #print("Left: " + str(x_l) + ", " + str(y_l) + ", " + str(z_l))
+                            all_frames.append(frame)        # should work?
+                            time.sleep(0.1)     # todo let's assume that this is 100 ms, prediction
+                            print(len(all_frames))
+                            if len(all_frames) > 210:
+                                print("STOP")
+                            ############################
+                        else:
+                            self.prediction = self.model.predict_proba(np.array(frame).reshape(1, -1))
 
                         self.x_list_l = []
                         self.y_list_l = []
@@ -173,7 +177,7 @@ class MoverReceiver:
 
                         best_pred_probability = np.amax(self.prediction)
 
-                        if best_pred_probability > 0.75:
+                        if best_pred_probability > 0.75:        #
                             self.best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
                             self.controller.manage_prediction(self.best_pred)
 
@@ -397,7 +401,7 @@ class GUI:
 ########################################################################################
 # Startup
 
-# all_frames = []
-
+all_frames = []
+debug_learning = False
 mov = MoverReceiver()
 gui = GUI(mov)
