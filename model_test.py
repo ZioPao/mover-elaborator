@@ -201,43 +201,54 @@ X_test = final_X[indices[-test_sub:]]
 y_test = final_y[indices[-test_sub:]]
 
 
-c_value = 12        # 24 is the best value
+c_value = 24        # 24 is the best value
 cv = StratifiedKFold(random_state=24, shuffle=True)
 clf_svm = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
 clf_svm = CalibratedClassifierCV(base_estimator=clf_svm, cv=cv)
-clf_knn = KNeighborsClassifier()
+clf_knn = KNeighborsClassifier(n_neighbors=5, p=1)
 clf_knn = CalibratedClassifierCV(base_estimator=clf_knn, cv=cv)
 clf_svm.fit(X_train, y_train)
 clf_knn.fit(X_train, y_train)
-pickle.dump(clf_svm, open('trained_models/mod8.bin', 'wb'))
+
+
+#pickle.dump(clf_svm, open('trained_models/mod8.bin', 'wb'))
 
 
 
 fig, axes = plt.subplots(3, 2, figsize=(10, 15))
-title = "Learning Curves (SVM)"
+title = "Learning Curves (SVC)"
 # Cross validation with 100 iterations to get smoother mean test and train
 # score curves, each time with 20% data randomly selected as a validation set.
 plot_learning_curve(
-    clf_svm, title, final_X, final_y, axes=axes[:, 0], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
+    clf_svm, title, X_test, y_test, axes=axes[:, 0], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
 
 title = r"Learning Curves (KNN)"
 # SVC is more expensive so we do a lower number of CV iterations:
 plot_learning_curve(
-    clf_knn, title, final_X, final_y, axes=axes[:, 1], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
+    clf_knn, title, X_test, y_test, axes=axes[:, 1], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
 
 plt.show()
 
 
-# confusion matrix
-#y_pred = clf_svm.predict_proba(X_test)
-y_pred = clf_knn.predict_proba(X_test)
+# CONFUSION MATRIX SVC
+y_pred = clf_svm.predict_proba(X_test)
 y_pred = np.argmax(y_pred, axis=1)
-
 
 cm = confusion_matrix(y_test, y_pred)
 plt.matshow(cm)
-#plt.title('SVM - C= {c}, accuracy={acc:.3f}'.format(c=c_value, acc=accuracy_score(y_test, y_pred)))
-plt.title('KNN - n_neighbors=2, accuracy=%.3f' % accuracy_score(y_test, y_pred))
+plt.title('SVC - C= {c}, accuracy={acc:.3f}'.format(c=c_value, acc=accuracy_score(y_test, y_pred)))
+plt.colorbar()
+plt.ylabel('True label')
+plt.xlabel('Predicted label')
+plt.show()
+
+# CONFUSION MATRIX KNN
+y_pred = clf_knn.predict_proba(X_test)
+y_pred = np.argmax(y_pred, axis=1)
+
+cm = confusion_matrix(y_test, y_pred)
+plt.matshow(cm)
+plt.title('KNN - p=1, accuracy=%.3f' % accuracy_score(y_test, y_pred))
 plt.colorbar()
 plt.ylabel('True label')
 plt.xlabel('Predicted label')
@@ -245,18 +256,15 @@ plt.show()
 
 
 
-
-
-
-# Validation curve
-param_range = np.logspace(-1, 2, 10)
-train_scores, test_scores = validation_curve(clf_svm, final_X, final_y, param_name="base_estimator__C", param_range=param_range, scoring="accuracy", n_jobs=-1)
+# Validation curves SVC
+param_range = np.linspace(0, 50, 200)
+train_scores, test_scores = validation_curve(clf_svm, X_test, y_test, param_name="base_estimator__C", param_range=param_range, scoring="accuracy", n_jobs=-1)
 train_scores_mean = np.mean(train_scores, axis=1)
 train_scores_std = np.std(train_scores, axis=1)
 test_scores_mean = np.mean(test_scores, axis=1)
 test_scores_std = np.std(test_scores, axis=1)
 
-plt.title("Validation Curve with SVC")
+plt.title("Validation Curve for SVC model")
 plt.xlabel(r"C")
 plt.ylabel("Score")
 plt.ylim(0.0, 1.1)
@@ -270,12 +278,47 @@ plt.fill_between(param_range, test_scores_mean - test_scores_std,
 plt.legend(loc="best")
 plt.show()
 
+# Validation curve KNN
+#param_range = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] p
+param_range = np.linspace(0,50, dtype=int)
+train_scores, test_scores = validation_curve(clf_knn, X_test, y_test, param_name="base_estimator__n_neighbors", param_range=param_range, scoring="accuracy", n_jobs=-1)
+train_scores_mean = np.mean(train_scores, axis=1)
+train_scores_std = np.std(train_scores, axis=1)
+test_scores_mean = np.mean(test_scores, axis=1)
+test_scores_std = np.std(test_scores, axis=1)
 
-# Permutation Score
+plt.title("Validation Curves for KNN model")
+plt.xlabel(r"p")
+plt.ylabel("Score")
+plt.ylim(0.0, 1.1)
+lw = 2
+plt.semilogx(param_range, train_scores_mean, label="Training score", color="darkorange", lw=lw)
+plt.fill_between(param_range, train_scores_mean - train_scores_std,
+                 train_scores_mean + train_scores_std, alpha=0.2, color="darkorange", lw=lw,)
+plt.semilogx(param_range, test_scores_mean, label="Cross-validation score", color="navy", lw=lw)
+plt.fill_between(param_range, test_scores_mean - test_scores_std,
+                 test_scores_mean + test_scores_std, alpha=0.2, color="navy", lw=lw,)
+plt.legend(loc="best")
+plt.show()
 
+# Permutation Score SVC
 score_dataset, perm_scores_dataset, pvalue_dataset = permutation_test_score(
-    clf_svm, final_X, final_y, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1
-)
+    clf_svm, X_test, y_test, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1)
+
+
+fig, ax = plt.subplots()
+
+ax.hist(perm_scores_dataset, bins=20, density=True)
+ax.axvline(score_dataset, ls="--", color="r")
+score_label = f"Score on original\ndata: {score_dataset:.2f}\n(p-value: {pvalue_dataset:.3f})"
+ax.text(0.7, 10, score_label, fontsize=12)
+ax.set_xlabel("Accuracy score")
+_ = ax.set_ylabel("Probability")
+
+
+# Permutation Score KNN
+score_dataset, perm_scores_dataset, pvalue_dataset = permutation_test_score(
+    clf_knn, X_test, y_test, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1)
 
 
 fig, ax = plt.subplots()

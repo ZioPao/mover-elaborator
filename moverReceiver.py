@@ -1,13 +1,25 @@
+import time
 import serial
 import serial.tools.list_ports
 from serial import SerialException
 import tkinter as tk
 import re
 import pickle
-from config import *
+import configparser
 import asyncio
 from controller_module import Controller
 import numpy as np
+import threading
+
+
+# Config setup
+
+config = configparser.ConfigParser()
+config.read('settings.ini')
+
+
+
+
 
 
 class MoverReceiver:
@@ -185,7 +197,7 @@ class MoverReceiver:
                         else:
                             self.controller.decrease_speed()
                 else:
-                    self.current_data = [[0,0,0], [0,0,0]]
+                    self.current_data = [[0, 0, 0], [0, 0, 0]]
                     self.controller.decrease_speed()
             except TypeError as e:
                 print("Entering type error")
@@ -240,6 +252,11 @@ class GUI:
             self.stop_button = tk.Button(self.buttons_frame, text='Stop', command=self.mover.stop_currently_running_thread)
             self.stop_button.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.N)
             self.stop_button.config(fg='black')
+
+            self.config_button = tk.Button(self.buttons_frame, text='Config', command=lambda: self.open_config_window())
+            self.config_button.pack(side=tk.RIGHT, padx=5, pady=5, anchor=tk.N)
+            self.config_button.config(fg='black')
+
 
             self.debug_frame = tk.LabelFrame(self.main_frame)
             self.debug_frame.pack(expand=True, fill=tk.BOTH)
@@ -360,7 +377,6 @@ class GUI:
             self.update_values()
 
     def open_config_window(self):
-        global config
 
         if self.config_window is None or self.config_window.winfo_exists() == 0:
             self.config_window = tk.Toplevel(self.window)
@@ -369,32 +385,33 @@ class GUI:
             self.config_window.maxsize(250, 150)
             self.config_window.title("Config")
 
-            # Data divider
-            tk.Label(self.config_window, text="Divider: ").grid(row=0, sticky=tk.W)
+            # best_pred_probability
+            tk.Label(self.config_window, text="Prediction probability: ").grid(row=0, sticky=tk.W)
             e1 = tk.Entry(self.config_window)
-            e1.insert(tk.END, int(config['Data']['data_divider']))
+            e1.insert(tk.END, float(config['Data']['best_pred_probability']))
             e1.grid(row=0, column=1)
 
             # Debug
-            chk_d_r = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
-            tk.Checkbutton(self.config_window, text='Debug Receiver',
-                           variable=chk_d_r, onvalue=1, offvalue=0).grid(row=2, sticky=tk.W, pady=(10, 2))
+            #chk_d_r = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
+            #tk.Checkbutton(self.config_window, text='Debug Receiver',
+            #               variable=chk_d_r, onvalue=1, offvalue=0).grid(row=2, sticky=tk.W, pady=(10, 2))
 
-            chk_d_c = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
-            tk.Checkbutton(self.config_window, text='Debug Virtual Controller',
-                           variable=chk_d_c, onvalue=1, offvalue=0).grid(row=3, sticky=tk.W)
+            #chk_d_c = tk.IntVar(value=int(config['Debug']['debug_printing_receiver']))
+            #tk.Checkbutton(self.config_window, text='Debug Virtual Controller',
+            #               variable=chk_d_c, onvalue=1, offvalue=0).grid(row=3, sticky=tk.W)
             # should close and set ini
             tk.Button(self.config_window, text='OK',
-                      command=lambda: self.save_settings(e1, chk_d_r)).grid(row=4, column=1, pady=(10, 2))
+                      command=lambda: self.save_settings(e1)).grid(row=4, column=1, pady=(10, 2))
 
-    def save_settings(self, e1, c1):
+    def save_settings(self, e1):
+        global config
+        config['Data']['best_pred_probability'] = e1.get()
 
-        config['Data']['data_divider'] = e1.get()
-        config['Debug']['debug_printing_receiver'] = str(c1.get())
-
-        with open('settings.ini', 'w') as configfile:  # save
+        with open('settings.ini', 'w') as configfile:
             config.write(configfile)
 
+        # Reload
+        config.read('settings.ini')
         self.config_window.destroy()
 
 

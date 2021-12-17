@@ -14,7 +14,7 @@ config = configparser.ConfigParser()
 config.read('settings.ini')
 
 
-data_divider = int(config['Data']['data_divider'])
+best_pred_probability = float(config['Data']['best_pred_probability'])
 
 
 #####################
