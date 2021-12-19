@@ -1,148 +1,13 @@
-import numpy as np
 import pickle
+from itertools import cycle
+from numpy import interp
 from sklearn import svm
-import matplotlib.pyplot as plt
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import confusion_matrix, accuracy_score
-from sklearn.model_selection import learning_curve, validation_curve, StratifiedKFold, permutation_test_score
+from sklearn.model_selection import StratifiedKFold
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-
-def plot_learning_curve(estimator, title, X, y, axes=None, ylim=None, cv=None, n_jobs=None, train_sizes=np.linspace(0.1, 1.0, 5),):
-    """
-    Generate 3 plots: the test and training learning curve, the training
-    samples vs fit times curve, the fit times vs score curve.
-
-    Parameters
-    ----------
-    estimator : estimator instance
-        An estimator instance implementing `fit` and `predict` methods which
-        will be cloned for each validation.
-
-    title : str
-        Title for the chart.
-
-    X : array-like of shape (n_samples, n_features)
-        Training vector, where ``n_samples`` is the number of samples and
-        ``n_features`` is the number of features.
-
-    y : array-like of shape (n_samples) or (n_samples, n_features)
-        Target relative to ``X`` for classification or regression;
-        None for unsupervised learning.
-
-    axes : array-like of shape (3,), default=None
-        Axes to use for plotting the curves.
-
-    ylim : tuple of shape (2,), default=None
-        Defines minimum and maximum y-values plotted, e.g. (ymin, ymax).
-
-    cv : int, cross-validation generator or an iterable, default=None
-        Determines the cross-validation splitting strategy.
-        Possible inputs for cv are:
-
-          - None, to use the default 5-fold cross-validation,
-          - integer, to specify the number of folds.
-          - :term:`CV splitter`,
-          - An iterable yielding (train, test) splits as arrays of indices.
-
-        For integer/None inputs, if ``y`` is binary or multiclass,
-        :class:`StratifiedKFold` used. If the estimator is not a classifier
-        or if ``y`` is neither binary nor multiclass, :class:`KFold` is used.
-
-        Refer :ref:`User Guide <cross_validation>` for the various
-        cross-validators that can be used here.
-
-    n_jobs : int or None, default=None
-        Number of jobs to run in parallel.
-        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
-        ``-1`` means using all processors. See :term:`Glossary <n_jobs>`
-        for more details.
-
-    train_sizes : array-like of shape (n_ticks,)
-        Relative or absolute numbers of training examples that will be used to
-        generate the learning curve. If the ``dtype`` is float, it is regarded
-        as a fraction of the maximum size of the training set (that is
-        determined by the selected validation method), i.e. it has to be within
-        (0, 1]. Otherwise it is interpreted as absolute sizes of the training
-        sets. Note that for classification the number of samples usually have
-        to be big enough to contain at least one sample from each class.
-        (default: np.linspace(0.1, 1.0, 5))
-    """
-    if axes is None:
-        _, axes = plt.subplots(1, 3, figsize=(20, 5))
-
-    axes[0].set_title(title)
-    if ylim is not None:
-        axes[0].set_ylim(*ylim)
-    axes[0].set_xlabel("Training examples")
-    axes[0].set_ylabel("Score")
-
-    train_sizes, train_scores, test_scores, fit_times, _ = learning_curve(
-        estimator,
-        X,
-        y,
-        cv=cv,
-        n_jobs=n_jobs,
-        train_sizes=train_sizes,
-        return_times=True,
-    )
-    train_scores_mean = np.mean(train_scores, axis=1)
-    train_scores_std = np.std(train_scores, axis=1)
-    test_scores_mean = np.mean(test_scores, axis=1)
-    test_scores_std = np.std(test_scores, axis=1)
-    fit_times_mean = np.mean(fit_times, axis=1)
-    fit_times_std = np.std(fit_times, axis=1)
-
-    # Plot learning curve
-    axes[0].grid()
-    axes[0].fill_between(
-        train_sizes,
-        train_scores_mean - train_scores_std,
-        train_scores_mean + train_scores_std,
-        alpha=0.1,
-        color="r",
-    )
-    axes[0].fill_between(
-        train_sizes,
-        test_scores_mean - test_scores_std,
-        test_scores_mean + test_scores_std,
-        alpha=0.1,
-        color="g",
-    )
-    axes[0].plot(
-        train_sizes, train_scores_mean, "o-", color="r", label="Training score"
-    )
-    axes[0].plot(
-        train_sizes, test_scores_mean, "o-", color="g", label="Cross-validation score"
-    )
-    axes[0].legend(loc="best")
-
-    # Plot n_samples vs fit_times
-    axes[1].grid()
-    axes[1].plot(train_sizes, fit_times_mean, "o-")
-    axes[1].fill_between(
-        train_sizes,
-        fit_times_mean - fit_times_std,
-        fit_times_mean + fit_times_std,
-        alpha=0.1,
-    )
-    axes[1].set_xlabel("Training examples")
-    axes[1].set_ylabel("fit_times")
-    axes[1].set_title("Scalability of the model")
-
-    # Plot fit_time vs score
-    axes[2].grid()
-    axes[2].plot(fit_times_mean, test_scores_mean, "o-")
-    axes[2].fill_between(
-        fit_times_mean,
-        test_scores_mean - test_scores_std,
-        test_scores_mean + test_scores_std,
-        alpha=0.1,
-    )
-    axes[2].set_xlabel("fit_times")
-    axes[2].set_ylabel("Score")
-    axes[2].set_title("Performance of the model")
-
-    return plt
+from sklearn.preprocessing import label_binarize
+from methods_for_tests import *
 
 
 walk_X = pickle.load(open('datasets_to_compile/walk.bin', 'rb'))
@@ -169,25 +34,77 @@ n_samples, nx, ny = side_right_X.shape
 side_right_X_r = side_right_X.reshape((n_samples, nx*ny))
 side_right_y = np.full(n_samples, 3)
 
-
 final_X = np.vstack((walk_X_r, run_X_r))
 final_X = np.vstack((final_X, side_left_X_r))
 final_X = np.vstack((final_X, side_right_X_r))
-
-
 final_y = np.append(walk_y, run_y)
 final_y = np.append(final_y, side_left_y)
 final_y = np.append(final_y, side_right_y)
 
-#X_train, X_test, y_train, y_test = train_test_split(final_X, final_y, test_size=0.3, random_state=0)
+# let's mix it up boy
+np.random.seed(0)
+test_sub = int(0.3*len(final_y))        # 30% of the dataset
+indices = np.random.permutation(len(final_X))
+X_train = final_X[indices[:-test_sub]]
+y_train = final_y[indices[:-test_sub]]
+X_test = final_X[indices[-test_sub:]]
+y_test = final_y[indices[-test_sub:]]
 
 
-# weights
-#weight = np.ones(len(final_y))
-#weight[0:len(walk_y)] *= 3
-#weight[len(walk_y):len(run_y)] *= 2
+c_value = 24        # 24 is the best value
+cv = StratifiedKFold(random_state=42, shuffle=True)
+
+clf_svc = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
+clf_svc.fit(X_train, y_train)
+calibrated_clf_svc = CalibratedClassifierCV(base_estimator=clf_svc, cv="prefit")
+calibrated_clf_svc.fit(X_test, y_test)
+
+clf_knn = KNeighborsClassifier(p=1)
+clf_knn.fit(X_train, y_train)
+calibrated_clf_knn = CalibratedClassifierCV(base_estimator=clf_knn, cv='prefit')
+calibrated_clf_knn.fit(X_test, y_test)
 
 
+#pickle.dump(clf_svm, open('trained_models/mod8.bin', 'wb'))
+
+#load old dataset
+#old_dataset = [final_X, final_y]
+#pickle.dump(old_dataset, open('old_dataset.bin', 'wb'))
+old_dataset = pickle.load(open('old_dataset.bin', 'rb'))
+X_test_diff, y_test_diff = old_dataset
+
+print_cm(calibrated_clf_svc, "Calibrated SVC", X_test_diff, y_test_diff)
+print_cm(calibrated_clf_knn, "Calibrated KNN", X_test_diff, y_test_diff)
+print_cm(clf_svc, "Uncalibrated SVC", X_test_diff, y_test_diff)
+print_cm(clf_knn, "Uncalibrated KNN", X_test_diff, y_test_diff)
+
+# Doesn't work with another y_test and must be uncalibrated!
+# This is totally broken
+print_learning_curves(clf_svc, "SVC", clf_knn, "KNN", X_test, y_test, cv)
+
+# param_range = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] p
+
+print_validation_curves(clf_svc, 'SVC', X_test, y_test, 'C',  param_range=np.linspace(0, 50, 200))
+print_validation_curves(clf_knn, 'KNN', X_test, y_test, 'n_neighbors', np.linspace(0, 50, dtype=int))
+print_validation_curves(clf_knn, 'KNN', X_test, y_test, 'p', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Binarize the output
+final_y = label_binarize(final_y, classes=[0., 1., 2., 3.])
+n_classes = final_y.shape[1]
 
 # let's mix it up boy
 np.random.seed(0)
@@ -201,131 +118,113 @@ X_test = final_X[indices[-test_sub:]]
 y_test = final_y[indices[-test_sub:]]
 
 
-c_value = 24        # 24 is the best value
-cv = StratifiedKFold(random_state=24, shuffle=True)
-clf_svm = svm.SVC(probability=True, gamma='scale', C=c_value)        # More than 1 will get better result, 0.83 vs 0.93. But is it overfitting?
-clf_svm = CalibratedClassifierCV(base_estimator=clf_svm, cv=cv)
-clf_knn = KNeighborsClassifier(n_neighbors=5, p=1)
-clf_knn = CalibratedClassifierCV(base_estimator=clf_knn, cv=cv)
-clf_svm.fit(X_train, y_train)
+clf_knn = OneVsRestClassifier( KNeighborsClassifier(n_neighbors=5, p=1))
 clf_knn.fit(X_train, y_train)
+y_score = clf_knn.predict_proba(X_test)
 
 
-#pickle.dump(clf_svm, open('trained_models/mod8.bin', 'wb'))
+plot_calibration_curves("KNN", 4, y_score, y_test)
 
 
+clf_svc = OneVsRestClassifier(svm.SVC(probability=True, gamma='scale', C=c_value))
+y_score = clf_svc.fit(X_train, y_train).decision_function(X_test)
 
-fig, axes = plt.subplots(3, 2, figsize=(10, 15))
-title = "Learning Curves (SVC)"
-# Cross validation with 100 iterations to get smoother mean test and train
-# score curves, each time with 20% data randomly selected as a validation set.
-plot_learning_curve(
-    clf_svm, title, X_test, y_test, axes=axes[:, 0], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
-
-title = r"Learning Curves (KNN)"
-# SVC is more expensive so we do a lower number of CV iterations:
-plot_learning_curve(
-    clf_knn, title, X_test, y_test, axes=axes[:, 1], ylim=(0.5, 1.01), cv=cv, n_jobs=-1)
-
-plt.show()
+clf_svc.decision_function(X_test)
 
 
-# CONFUSION MATRIX SVC
-y_pred = clf_svm.predict_proba(X_test)
-y_pred = np.argmax(y_pred, axis=1)
-
-cm = confusion_matrix(y_test, y_pred)
-plt.matshow(cm)
-plt.title('SVC - C= {c}, accuracy={acc:.3f}'.format(c=c_value, acc=accuracy_score(y_test, y_pred)))
-plt.colorbar()
-plt.ylabel('True label')
-plt.xlabel('Predicted label')
-plt.show()
-
-# CONFUSION MATRIX KNN
-y_pred = clf_knn.predict_proba(X_test)
-y_pred = np.argmax(y_pred, axis=1)
-
-cm = confusion_matrix(y_test, y_pred)
-plt.matshow(cm)
-plt.title('KNN - p=1, accuracy=%.3f' % accuracy_score(y_test, y_pred))
-plt.colorbar()
-plt.ylabel('True label')
-plt.xlabel('Predicted label')
-plt.show()
+plot_calibration_curves("SVC", n_classes, y_score, y_test)
 
 
 
-# Validation curves SVC
-param_range = np.linspace(0, 50, 200)
-train_scores, test_scores = validation_curve(clf_svm, X_test, y_test, param_name="base_estimator__C", param_range=param_range, scoring="accuracy", n_jobs=-1)
-train_scores_mean = np.mean(train_scores, axis=1)
-train_scores_std = np.std(train_scores, axis=1)
-test_scores_mean = np.mean(test_scores, axis=1)
-test_scores_std = np.std(test_scores, axis=1)
 
-plt.title("Validation Curve for SVC model")
-plt.xlabel(r"C")
-plt.ylabel("Score")
-plt.ylim(0.0, 1.1)
-lw = 2
-plt.semilogx(param_range, train_scores_mean, label="Training score", color="darkorange", lw=lw)
-plt.fill_between(param_range, train_scores_mean - train_scores_std,
-                 train_scores_mean + train_scores_std, alpha=0.2, color="darkorange", lw=lw,)
-plt.semilogx(param_range, test_scores_mean, label="Cross-validation score", color="navy", lw=lw)
-plt.fill_between(param_range, test_scores_mean - test_scores_std,
-                 test_scores_mean + test_scores_std, alpha=0.2, color="navy", lw=lw,)
-plt.legend(loc="best")
-plt.show()
+#########################################################
+def plot_calibration_curves(name, n_classes, y_score, y_test):
+    # Compute ROC curve and ROC area for each class
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
 
-# Validation curve KNN
-#param_range = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] p
-param_range = np.linspace(0,50, dtype=int)
-train_scores, test_scores = validation_curve(clf_knn, X_test, y_test, param_name="base_estimator__n_neighbors", param_range=param_range, scoring="accuracy", n_jobs=-1)
-train_scores_mean = np.mean(train_scores, axis=1)
-train_scores_std = np.std(train_scores, axis=1)
-test_scores_mean = np.mean(test_scores, axis=1)
-test_scores_std = np.std(test_scores, axis=1)
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_test[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
 
-plt.title("Validation Curves for KNN model")
-plt.xlabel(r"p")
-plt.ylabel("Score")
-plt.ylim(0.0, 1.1)
-lw = 2
-plt.semilogx(param_range, train_scores_mean, label="Training score", color="darkorange", lw=lw)
-plt.fill_between(param_range, train_scores_mean - train_scores_std,
-                 train_scores_mean + train_scores_std, alpha=0.2, color="darkorange", lw=lw,)
-plt.semilogx(param_range, test_scores_mean, label="Cross-validation score", color="navy", lw=lw)
-plt.fill_between(param_range, test_scores_mean - test_scores_std,
-                 test_scores_mean + test_scores_std, alpha=0.2, color="navy", lw=lw,)
-plt.legend(loc="best")
-plt.show()
+    # Compute micro-average ROC curve and ROC area
+    fpr["micro"], tpr["micro"], _ = roc_curve(y_test.ravel(), y_score.ravel())
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
-# Permutation Score SVC
-score_dataset, perm_scores_dataset, pvalue_dataset = permutation_test_score(
-    clf_svm, X_test, y_test, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1)
+    # First aggregate all false positive rates
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+
+    # Then interpolate all ROC curves at this points
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(n_classes):
+        mean_tpr += interp(all_fpr, fpr[i], tpr[i])
+
+    # Finally average it and compute AUC
+    mean_tpr /= n_classes
+
+    fpr["macro"] = all_fpr
+    tpr["macro"] = mean_tpr
+    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+    # Plot all ROC curves
+    plt.figure()
+    plt.plot(
+        fpr["micro"],
+        tpr["micro"],
+        label="micro-average ROC curve (area = {0:0.2f})".format(roc_auc["micro"]),
+        color="deeppink",
+        linestyle=":",
+        linewidth=4,
+    )
+
+    plt.plot(
+        fpr["macro"],
+        tpr["macro"],
+        label="macro-average ROC curve (area = {0:0.2f})".format(roc_auc["macro"]),
+        color="navy",
+        linestyle=":",
+        linewidth=4,
+    )
+
+    colors = cycle(["aqua", "darkorange", "cornflowerblue"])
+    for i, color in zip(range(n_classes), colors):
+        plt.plot(
+            fpr[i],
+            tpr[i],
+            color=color,
+            lw=lw,
+            label="ROC curve of class {0} (area = {1:0.2f})".format(i, roc_auc[i]),
+        )
+
+    plt.plot([0, 1], [0, 1], "k--", lw=lw)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(name)
+    plt.legend(loc="lower right")
+    plt.show()
+
+def cal_curves(name, y_test, y_prob):
+    macro_roc_auc_ovo = roc_auc_score(y_test, y_prob, multi_class="ovo", average="macro")
+    weighted_roc_auc_ovo = roc_auc_score(
+        y_test, y_prob, multi_class="ovo", average="weighted"
+    )
+    macro_roc_auc_ovr = roc_auc_score(y_test, y_prob, multi_class="ovr", average="macro")
+    weighted_roc_auc_ovr = roc_auc_score(
+        y_test, y_prob, multi_class="ovr", average="weighted"
+    )
 
 
-fig, ax = plt.subplots()
+    print(name)
+    print(
+        "One-vs-One ROC AUC scores:\n{:.6f} (macro),\n{:.6f} "
+        "(weighted by prevalence)".format(macro_roc_auc_ovo, weighted_roc_auc_ovo)
+    )
+    print(
+        "One-vs-Rest ROC AUC scores:\n{:.6f} (macro),\n{:.6f} "
+        "(weighted by prevalence)".format(macro_roc_auc_ovr, weighted_roc_auc_ovr)
+    )
+    print()
 
-ax.hist(perm_scores_dataset, bins=20, density=True)
-ax.axvline(score_dataset, ls="--", color="r")
-score_label = f"Score on original\ndata: {score_dataset:.2f}\n(p-value: {pvalue_dataset:.3f})"
-ax.text(0.7, 10, score_label, fontsize=12)
-ax.set_xlabel("Accuracy score")
-_ = ax.set_ylabel("Probability")
-
-
-# Permutation Score KNN
-score_dataset, perm_scores_dataset, pvalue_dataset = permutation_test_score(
-    clf_knn, X_test, y_test, scoring="accuracy", cv=cv, n_permutations=1000, n_jobs=-1)
-
-
-fig, ax = plt.subplots()
-
-ax.hist(perm_scores_dataset, bins=20, density=True)
-ax.axvline(score_dataset, ls="--", color="r")
-score_label = f"Score on original\ndata: {score_dataset:.2f}\n(p-value: {pvalue_dataset:.3f})"
-ax.text(0.7, 10, score_label, fontsize=12)
-ax.set_xlabel("Accuracy score")
-_ = ax.set_ylabel("Probability")

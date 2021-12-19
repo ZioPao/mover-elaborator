@@ -386,7 +386,7 @@ class GUI:
             self.config_window.title("Config")
 
             # best_pred_probability
-            tk.Label(self.config_window, text="Prediction probability: ").grid(row=0, sticky=tk.W)
+            tk.Label(self.config_window, text="Prediction probability: ").grid(pady=10, row=0, sticky=tk.W)
             e1 = tk.Entry(self.config_window)
             e1.insert(tk.END, float(config['Data']['best_pred_probability']))
             e1.grid(row=0, column=1)
