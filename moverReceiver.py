@@ -1,6 +1,7 @@
 import time
 import serial
 import serial.tools.list_ports
+from pynput.keyboard import Key
 from serial import SerialException
 import tkinter as tk
 import re
@@ -10,6 +11,9 @@ import asyncio
 from controller_module import Controller
 import numpy as np
 import threading
+from pynput import keyboard
+
+
 
 
 # Config setup
@@ -34,7 +38,7 @@ class MoverReceiver:
         self.left_mov, self.right_mov = self.init_movers()
         self.controller = Controller()  # Setup the controller
 
-        self.model = pickle.load(open('trained_models/mod8.bin', 'rb'))
+        self.model = pickle.load(open('trained_models/mod9.bin', 'rb'))
         self.prediction = -1
         self.x_list_l = []
         self.y_list_l = []
@@ -82,6 +86,14 @@ class MoverReceiver:
 
         return left_mov_tmp, right_mov_tmp
 
+    def on_press(self, key):
+
+        if key == Key.X:
+            self.controller.controller.set_value('BtnA', 1)
+            time.sleep(1)
+            self.controller.controller.set_value('BtnA', 0)
+            print("Trying to focus on the application...")
+
     # Main operations
     def read_data(self):
         is_done = False
@@ -128,7 +140,14 @@ class MoverReceiver:
         return x, y, z, t
 
     def loop(self):
+
+        listener = keyboard.Listener(on_press=self.on_press)
+        listener.start()  # start to listen on a separate thread
+        #listener.join()  # remove if main thread is polling self.keys
+        print("Starting loop")
+
         while self.should_run_thread:
+
             try:
                 x_l, y_l, z_l, t_l, x_r, y_r, z_r, t_r = self.read_data()
                 zero_check = np.array([x_l, y_l, z_l, x_r, y_r, z_r])
@@ -189,7 +208,7 @@ class MoverReceiver:
 
                         best_pred_probability = np.amax(self.prediction)
 
-                        if best_pred_probability > 0.75:        #
+                        if best_pred_probability > float(config['Data']['best_pred_probability']):        #Customizable
                             self.best_pred = np.where(self.prediction[0] == best_pred_probability)[0][0]
                             self.controller.manage_prediction(self.best_pred)
 

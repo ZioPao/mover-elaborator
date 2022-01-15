@@ -1,7 +1,6 @@
 import pyxinput
 from config import *
 
-
 LEFT_AXIS_X = 'AxisLx'
 LEFT_AXIS_Y = 'AxisLy'
 
@@ -19,13 +18,20 @@ RIGHT = 1
 
 class Controller:
     # 1) Get predictions from main
-    # 2) Decide which to chose
+    # 2) Decide which to choose
     # 3) Set analog value for x and y depending on current value
     # 4) Backup current value for x and y
 
     def __init__(self):
         # Setup virtual controller
         self.controller = pyxinput.vController()
+
+        # Really hacky way to wake it up but hey it should work
+        time.sleep(0.5)
+        self.controller.set_value('BtnA', 1)
+        time.sleep(0.5)
+        self.controller.set_value('BtnA', 0)
+
         self.analog_values_y = {'old': 0., 'current': 0.}
         self.analog_values_x = {'old': 0., 'current': 0.}
 
